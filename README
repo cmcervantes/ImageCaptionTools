@@ -1,0 +1,45 @@
+=================================================
+Table of Contents
+=================================================
+1) Introduction
+2) Build
+3) Usage
+4) Changelog
+
+=================================================
+1) Introduction
+=================================================
+TODO: Write an intro
+
+=================================================
+2) Build
+=================================================
+Assuming one has set up their java / maven / etc paths correctly,
+The ImageCaptionTools can be built using the accompanying build.sh script,
+which is little more than a wrapper for "mvn clean package".
+When building, we assume a directory structure as
+ImageCaptionTools
+|---target
+|---src
+    |---main
+        |---java
+            |---core
+            |---nlp
+            |---structures
+            |---utilities
+From there, maven (by way of the accompanying pom.xml) should
+compile the src into the target dir, which will contain a
+    ImageCaptionTools-VERSION.jar
+However, the point of breaking the ImageCaptionTools into their
+own project is to enable their inclusion as a maven dependency.
+To do so, use
+    mvn install
+    mvn deploy
+And then, include the following
+    <dependency>
+        <groupId>edu.illinois.cs.cl</groupId>
+        <artifactId>ImageCaptionTools</artifactId>
+        <version>1.0.0</version>
+    </dependency>
+
+

@@ -1,0 +1,4 @@
+Manifest-Version: 1.0
+Class-Path: lib/stanford-english-corenlp-2016-01-10-models.jar
+Main-Class: core.DocumentLoader
+

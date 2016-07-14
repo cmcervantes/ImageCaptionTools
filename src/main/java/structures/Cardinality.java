@@ -11,6 +11,7 @@ public class Cardinality
 {
     private int[] _baseValues;
     private boolean[] _ambiguity;
+    private boolean _isMass;
 
     /**Default Cardinality constructor, where both the base
      * values and the ambiguity values are provides for sets and
@@ -23,6 +24,16 @@ public class Cardinality
     {
         _baseValues = baseValues;
         _ambiguity = ambiguity;
+        _isMass = false;
+    }
+
+    /**Cardinality constructor used for mass mentions
+     */
+    public Cardinality()
+    {
+        _isMass = true;
+        _baseValues = new int[]{-1,-1};
+        _ambiguity = new boolean[]{false, false};
     }
 
     /**Cardinality constructor that accepts a cardinality
@@ -35,13 +46,20 @@ public class Cardinality
      */
     public Cardinality(String s) throws Exception
     {
-        String[] arr = s.split("\\|");
-        boolean setAmbig = arr[0].contains("+");
-        boolean elemAmbig = arr[1].contains("+");
-        int setValue = Integer.parseInt(arr[0].replace("+", ""));
-        int elemValue = Integer.parseInt(arr[1].replace("+", ""));
-        _baseValues = new int[]{setValue, elemValue};
-        _ambiguity = new boolean[]{setAmbig, elemAmbig};
+        if(s.equals("m")) {
+            _isMass = true;
+            _baseValues = new int[]{-1,-1};
+            _ambiguity = new boolean[]{false, false};
+        } else {
+            String[] arr = s.split("\\|");
+            boolean setAmbig = arr[0].contains("+");
+            boolean elemAmbig = arr[1].contains("+");
+            int setValue = Integer.parseInt(arr[0].replace("+", ""));
+            int elemValue = Integer.parseInt(arr[1].replace("+", ""));
+            _baseValues = new int[]{setValue, elemValue};
+            _ambiguity = new boolean[]{setAmbig, elemAmbig};
+            _isMass = false;
+        }
     }
 
     /**Returns this Cardinality as a string, in the form
@@ -52,6 +70,9 @@ public class Cardinality
     @Override
     public String toString()
     {
+        if(_isMass)
+            return "m";
+
         StringBuilder sb = new StringBuilder();
         sb.append(_baseValues[0]);
         if(_ambiguity[0])
@@ -104,6 +125,13 @@ public class Cardinality
      */
     public static Cardinality unify(Cardinality c1, Cardinality c2)
     {
+        if(c1._isMass && c2._isMass)
+            return c1;
+        else if(c1._isMass)
+            return c2;
+        else if(c2._isMass)
+            return c1;
+
         //both are ambiguous but we're unifying them anyway
         //(not recommended) take the smaller
         if(!c1.isAmbiguous() && !c2.isAmbiguous())
@@ -132,6 +160,9 @@ public class Cardinality
      */
     public static boolean approxEqual(Cardinality c1, Cardinality c2)
     {
+        if(c1._isMass || c2._isMass)
+            return true;
+
         if(!c1.isAmbiguous() && !c2.isAmbiguous())
             return c1.getValue() == c2.getValue();
         else if(c1.isAmbiguous() && c2.isAmbiguous())

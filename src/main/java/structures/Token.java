@@ -8,10 +8,9 @@ import utilities.StringUtil;
  *
  * @author ccervantes
  */
-public class Token
+public class Token extends Annotation
 {
     private String _text;
-    private int _idx;
     private int _captionIdx;
     private String _chunkType;
     private String _posTag;
@@ -19,30 +18,32 @@ public class Token
     private String _lemma;
 
     public int chunkIdx;
-    public int entityIdx;
+    public int mentionIdx;
 
     /**Creates a new Token object with all internal fields
      *
+     * @param docID
      * @param captionIdx
      * @param idx
      * @param text
      * @param lemma
      * @param chunkIdx
-     * @param entityIdx
+     * @param mentionIdx
      * @param chunkType
      * @param posTag
      * @param chainID
      */
-    public Token(int captionIdx, int idx, String text,
-                 String lemma, Integer chunkIdx, Integer entityIdx,
+    public Token(String docID, int captionIdx, int idx, String text,
+                 String lemma, Integer chunkIdx, Integer mentionIdx,
                  String chunkType, String posTag, String chainID)
     {
+        _docID = docID;
         _captionIdx = captionIdx;
         _idx = idx;
         _text = text;
         _lemma = lemma;
         this.chunkIdx = chunkIdx == null ? -1 : chunkIdx;
-        this.entityIdx = entityIdx == null ? -1 : entityIdx;
+        this.mentionIdx = mentionIdx == null ? -1 : mentionIdx;
         _chunkType = chunkType;
         _posTag = posTag;
         _chainID = chainID;
@@ -51,20 +52,44 @@ public class Token
     /**Token constructor originally written with for
      * the fromEntitiesStr functionality in Caption
      *
+     * @param docID
      * @param captionIdx
      * @param idx
      * @param text
-     * @param entityIdx
+     * @param mentionIdx
      * @param chainID
      */
-    public Token(int captionIdx, int idx, String text,
-                 Integer entityIdx, String chainID)
+    public Token(String docID, int captionIdx, int idx,
+                 String text, Integer mentionIdx, String chainID)
     {
+        _docID = docID;
         _captionIdx = captionIdx;
         _idx = idx;
         _text = text;
-        this.entityIdx = entityIdx == null ? -1 : entityIdx;
+        this.mentionIdx = mentionIdx == null ? -1 : mentionIdx;
         _chainID = chainID;
+    }
+
+    /**Token constructor specifying token-specific
+     * fields only; originally written for use in
+     * creating Tokens from a database
+     *
+     * @param docID
+     * @param captionIdx
+     * @param idx
+     * @param text
+     * @param lemma
+     * @param posTag
+     */
+    public Token(String docID, int captionIdx, int idx,
+                 String text, String lemma, String posTag)
+    {
+        _docID = docID;
+        _captionIdx = captionIdx;
+        _idx = idx;
+        _text = text;
+        _lemma = lemma;
+        _posTag = posTag;
     }
 
     /**Returns the original text of this token
@@ -81,15 +106,26 @@ public class Token
      *
      * @return  - key-value string of token attributes
      */
+    @Override
     public String toDebugString()
     {
-        String[] keys = {"capIdx", "idx", "chunkType",
+        String[] keys = {"docID", "capIdx", "idx", "chunkType",
                          "pos", "chainID", "chunkIdx",
-                         "entityIdx", "lemma", "text"};
-        Object[] vals = {_captionIdx, _idx, _chunkType,
+                         "mentionIdx", "lemma", "text"};
+        Object[] vals = {_docID, _captionIdx, _idx, _chunkType,
                         _posTag, _chainID, chunkIdx,
-                        entityIdx, _lemma, _text};
+                mentionIdx, _lemma, _text};
         return StringUtil.toKeyValStr(keys, vals);
+    }
+
+    /**Returns a dataset-unique ID for this token, in the form
+     * docID#capIdx;token:idx
+     *
+     * @return
+     */
+    public String getUniqueID()
+    {
+        return _docID + "#" + _captionIdx + ";token:" + _idx;
     }
 
     /**Returns a POS string, originally implemented for
@@ -103,7 +139,6 @@ public class Token
     }
 
     /* Getters */
-    public int getIdx(){return _idx;}
     public String getText(){return _text;}
     public String getLemma(){return _lemma;}
     public int getCaptionIdx(){return _captionIdx;}

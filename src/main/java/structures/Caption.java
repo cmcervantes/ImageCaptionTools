@@ -3,25 +3,21 @@ package structures;
 import edu.illinois.cs.cogcomp.nlp.lemmatizer.IllinoisLemmatizer;
 import utilities.StringUtil;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**The Caption class represents sentences in image caption datasets,
  * and is composed of tokens, chunks, and mentions.
  *
  * @author ccervantes
  */
-public class Caption
+public class Caption extends Annotation
 {
     private static IllinoisLemmatizer lemmatizer;
 
-    private int _idx;
-    private String _docID;
     private List<Token> _tokenList;
     private List<Chunk> _chunkList;
     private List<Mention> _mentionList;
+    private DependencyNode _rootNode;
 
     /**Default Caption constructor
      *
@@ -38,6 +34,21 @@ public class Caption
         initMentionList();
     }
 
+    /**Constructs a Caption without tokens, which
+     * should be added with addToken()
+     *
+     * @param docID
+     * @param idx
+     */
+    public Caption(String docID, int idx)
+    {
+        _docID = docID;
+        _idx = idx;
+        _tokenList = new ArrayList<>();
+        _chunkList = new ArrayList<>();
+        _mentionList = new ArrayList<>();
+    }
+
     /**Empty Caption constructor for use during static
      * Caption construction
      */
@@ -46,6 +57,125 @@ public class Caption
         _tokenList = new ArrayList<>();
         _chunkList = new ArrayList<>();
         _mentionList = new ArrayList<>();
+    }
+
+    /**Adds the given Token to the internal list
+     * in the position determined by token index
+     *
+     * @param t
+     */
+    public void addToken(Token t)
+    {
+        int insertionIdx =
+                Annotation.getInsertionIdx(_tokenList, t);
+        _tokenList.add(insertionIdx, t);
+    }
+
+    /**Creates a new Chunk with the tokens at the given
+     * ranges and type, adding it into the internal chunk
+     * list based on the given index
+     *
+     * @param chunkIdx
+     * @param chunkType
+     * @param startTokenIdx
+     * @param endTokenIdx
+     */
+    public void addChunk(int chunkIdx, String chunkType,
+                         int startTokenIdx, int endTokenIdx)
+    {
+        Chunk ch = new Chunk(_docID, _idx, chunkIdx, chunkType,
+                _tokenList.subList(startTokenIdx, endTokenIdx+1));
+        int insertionIdx = Annotation.getInsertionIdx(_chunkList, ch);
+        _chunkList.add(insertionIdx, ch);
+
+        //associates this chunk's tokens with this index
+        for(int i=startTokenIdx; i<= endTokenIdx; i++)
+            _tokenList.get(i).chunkIdx = chunkIdx;
+    }
+
+    /**Adds a new Mention with the given attributes and
+     * returns it
+     *
+     * @param idx
+     * @param lexicalType
+     * @param chainID
+     * @param card
+     * @param startTokenIdx
+     * @param endTokenIdx
+     * @return
+     */
+    public Mention addMention(int idx, String lexicalType, String chainID,
+                              Cardinality card, int startTokenIdx,
+                              int endTokenIdx)
+    {
+        List<Token> mentionTokenList =
+                _tokenList.subList(startTokenIdx, endTokenIdx+1);
+        List<Chunk> mentionChunkList = new ArrayList<>();
+        int startChunkIdx = mentionTokenList.get(0).chunkIdx;
+        int endChunkIdx = mentionTokenList.get(mentionTokenList.size()-1).chunkIdx;
+        for(int i=startChunkIdx; i<=endChunkIdx; i++)
+            mentionChunkList.add(_chunkList.get(i));
+
+        Mention m = new Mention(_docID, _idx, idx, chainID,
+                    mentionTokenList, mentionChunkList,
+                    lexicalType, card);
+        int insertionIdx =
+                Annotation.getInsertionIdx(_mentionList, m);
+        _mentionList.add(insertionIdx, m);
+
+        //associates this mention's tokens with this index
+        for(int i=startTokenIdx; i<= endTokenIdx; i++)
+            _tokenList.get(i).mentionIdx = idx;
+
+        return m;
+    }
+
+    /**Constructs the dependency tree (and sets the internal root node)
+     * based on the given dependency strings, which must be in the
+     * format gov_token_idx|relation|dep_token_idx
+     *
+     * @param dependencyStrings
+     */
+    public void setRootNode(Collection<String> dependencyStrings)
+    {
+        List<String> depStrings = new ArrayList<>(dependencyStrings);
+        boolean[] usedDepBits = new boolean[depStrings.size()];
+        Arrays.fill(usedDepBits, false);
+        _rootNode = null;
+
+        //construct our dependency tree, given the strings
+        boolean addedNode;
+        do{
+            addedNode = false;
+            for(int i=0; i<depStrings.size(); i++){
+                if(!usedDepBits[i]){
+                    String[] depArr = depStrings.get(i).split("\\|");
+                    int govTokenIdx = Integer.parseInt(depArr[0]);
+                    int depTokenIdx = Integer.parseInt(depArr[2]);
+
+                    if(govTokenIdx < 0){
+                        //if we already have a root node, bomb; I don't yet have a way to handle
+                        //multi-rooted captions
+                        //TODO: enable captions with multiple dependency roots
+                        if(_rootNode != null){
+                            _rootNode = null;
+                            return;
+                        }
+                        _rootNode = new DependencyNode(_tokenList.get(depTokenIdx));
+                        usedDepBits[i] = true;
+                        addedNode = true;
+                    } else if(_rootNode != null){
+                        //get the tokens specified by the indices
+                        DependencyNode govNode = _rootNode.findDependent(_tokenList.get(govTokenIdx));
+                        if(govNode != null){
+                            govNode.addDependent(_tokenList.get(depTokenIdx), depArr[1]);
+                            usedDepBits[i] = true;
+                            addedNode = true;
+                        }
+                    }
+                }
+            }
+        }while(addedNode);
     }
 
     /**Returns the Chunk immediately left-adjacent to ch;
@@ -77,11 +207,10 @@ public class Caption
     }
 
     /* Getters */
-    public int getIdx(){return _idx;}
-    public String getDocID(){return _docID;}
     public List<Mention> getMentionList(){return _mentionList;}
     public List<Token> getTokenList(){return _tokenList;}
     public List<Chunk> getChunkList(){return _chunkList;}
+    public DependencyNode getRootNode(){return _rootNode;}
 
     /**Returns a dataset-unique ID for this caption, in the form
      * docID#capIdx
@@ -132,6 +261,18 @@ public class Caption
     public String toString()
     {
         return StringUtil.listToString(_tokenList, " ");
+    }
+
+    /**Returns this caption's attributes as a key:value; string
+     *
+     * @return  - key-value string of caption attributes
+     */
+    @Override
+    public String toDebugString()
+    {
+        String[] keys = {"numTokens", "numChunks", "numMentions"};
+        Object[] vals = {_tokenList.size(), _chunkList.size(), _mentionList.size()};
+        return StringUtil.toKeyValStr(keys, vals);
     }
 
     /**Returns this caption as an html string where
@@ -285,7 +426,7 @@ public class Caption
             if(t.getChunkType() == null || t.getChunkType().equalsIgnoreCase("null"))
                 currentChunkIdx = -1;
 
-            currentEntityIdx = t.entityIdx;
+            currentEntityIdx = t.mentionIdx;
 
             //We want to handle three cases
             //a) We weren't building an entity, but now we are
@@ -431,7 +572,7 @@ public class Caption
             boolean closeEntity = false;
             boolean openEntity = false;
 
-            currentEntityIdx = t.entityIdx;
+            currentEntityIdx = t.mentionIdx;
 
             //We want to handle three cases
             //a) We weren't building an entity, but now we are
@@ -463,7 +604,7 @@ public class Caption
                     chainID = "0";
                 sb.append(chainID);
                 sb.append("/");
-                sb.append(entityTypeDict.get(t.entityIdx));
+                sb.append(entityTypeDict.get(t.mentionIdx));
                 sb.append(" ");
             }
 
@@ -574,6 +715,55 @@ public class Caption
         return conllStrings;
     }
 
+
+    /**Searches the dependency tree to find the VP chunk for which
+     * the given mention is the subject; null if m is not a subject
+     * or if this caption has no clean parse
+     *
+     * @param m
+     * @return
+     */
+    public Chunk getSubjectOf(Mention m)
+    {
+        Chunk subjOf = null;
+        if(_rootNode != null){
+            List<DependencyNode> nodeList = _rootNode.getNodes(m);
+            for(DependencyNode n : nodeList) {
+                String relation = n.getRelationToGovernor();
+                if(relation != null && relation.contains("subj")){
+                    Chunk ch = _chunkList.get(n.getGovernor().getToken().chunkIdx);
+                    if (ch.getChunkType().equals("VP"))
+                        subjOf = ch;
+                }
+            }
+        }
+        return subjOf;
+    }
+
+    /**Searches the dependency tree to find the VP chunk for which
+     * the given mention is an object; null if m is not an object
+     * or if this caption has no clean parse
+     *
+     * @param m
+     * @return
+     */
+    public Chunk getObjectOf(Mention m)
+    {
+        Chunk objOf = null;
+        if(_rootNode != null){
+            List<DependencyNode> nodeList = _rootNode.getNodes(m);
+            for(DependencyNode n : nodeList) {
+                String relation = n.getRelationToGovernor();
+                if(relation != null && relation.contains("obj")){
+                    Chunk ch = _chunkList.get(n.getGovernor().getToken().chunkIdx);
+                    if (ch.getChunkType().equals("VP"))
+                        objOf = ch;
+                }
+            }
+        }
+        return objOf;
+    }
+
     /**Initializes the internal chunk list from the token list
      */
     private void initChunkList()
@@ -586,7 +776,7 @@ public class Caption
         for(int tIdx=0; tIdx < _tokenList.size(); tIdx++) {
             Token t = _tokenList.get(tIdx);
             int currentChunkIdx = t.chunkIdx;
-            int currentEntityIdx = t.entityIdx;
+            int currentEntityIdx = t.mentionIdx;
             String currentChunkType = t.getChunkType();
 
             //this token is part of the currently in-progress
@@ -599,7 +789,7 @@ public class Caption
             //if the current token has a different, valid chunk idx,
             //store the last chunk
             if(prevChunkIdx > -1 && (!sameChunkIdx || tIdx == _tokenList.size()-1)) {
-                Chunk c = new Chunk(prevChunkIdx, prevChunkType, chunkTokenList);
+                Chunk c = new Chunk(_docID, _idx, prevChunkIdx, prevChunkType, chunkTokenList);
                 _chunkList.add(c);
             }
 
@@ -624,7 +814,7 @@ public class Caption
         int prevEntityIdx = -1;
         for(int i=0; i<_chunkList.size(); i++){
             Chunk ch = _chunkList.get(i);
-            int entityIdx = ch.getTokenList().get(0).entityIdx;
+            int entityIdx = ch.getTokenList().get(0).mentionIdx;
 
             //if this is an entity boundary, store the chunks
             if(prevEntityIdx != entityIdx || i == _chunkList.size()-1){
@@ -635,8 +825,8 @@ public class Caption
                     List<Token> tokenSubList = new ArrayList<>();
                     chunkSubList.forEach(c -> tokenSubList.addAll(c.getTokenList()));
                     Mention m = new Mention(_docID, _idx, prevEntityIdx,
-                            chunkSubList, tokenSubList,
-                            tokenSubList.get(0).getChainID());
+                            tokenSubList.get(0).getChainID(), tokenSubList, chunkSubList
+                    );
                     _mentionList.add(m);
                     startIdx_chunk = -1;
                 }
@@ -701,7 +891,7 @@ public class Caption
                 tokenIdx_chunkStart = c._tokenList.size();
             } else if(s.equals("]")) {
                 if(chunkIdx > -1){
-                    Chunk ch = new Chunk(chunkIdx, chunkType,
+                    Chunk ch = new Chunk(c._docID, c._idx, chunkIdx, chunkType,
                             c._tokenList.subList(tokenIdx_chunkStart,
                             c._tokenList.size()));
                     c._chunkList.add(ch);
@@ -710,9 +900,8 @@ public class Caption
                     chunkCounter++;
                 } else if(entityIdx > -1) {
                     Mention m = new Mention(c._docID, c._idx, entityIdx,
-                            c._chunkList.subList(chunkIdx_start, c._chunkList.size()),
-                            c._tokenList.subList(tokenIdx_mentionStart, c._tokenList.size()),
-                            chainID);
+                            chainID, c._tokenList.subList(tokenIdx_mentionStart, c._tokenList.size()), c._chunkList.subList(chunkIdx_start, c._chunkList.size())
+                    );
                     c._mentionList.add(m);
                     chainID = null;
                     entityIdx = -1;
@@ -733,8 +922,9 @@ public class Caption
                 String text = tokenArr[0];
                 String pos = tokenArr[1];
                 String lemma = lemmatizer.getLemma(text, pos);
-                Token t = new Token(c._idx, c._tokenList.size(), text, lemma,
-                        chunkIdx, entityIdx, chunkType, pos, chainID);
+                Token t = new Token(c._docID, c._idx, c._tokenList.size(),
+                        text, lemma, chunkIdx, entityIdx, chunkType, pos,
+                        chainID);
                 c._tokenList.add(t);
             }
         }
@@ -784,7 +974,7 @@ public class Caption
                     tokenText = word.replace("]", "");
                 else
                     tokenText = word;
-                Token t = new Token(idx, tokenIdx, tokenText,
+                Token t = new Token(docID, idx, tokenIdx, tokenText,
                                     mentionIdx, currentChainID);
                 c._tokenList.add(t);
                 tokenIdx++;
@@ -794,7 +984,7 @@ public class Caption
                             c._tokenList.subList(tokenIdx_startMention,
                             c._tokenList.size());
                     Mention m = new Mention(docID, idx, mentionIdx,
-                            mentionTokenList, currentChainID,
+                            currentChainID, mentionTokenList,
                             currentMentionType);
                     c._mentionList.add(m);
                     mentionIdx++;

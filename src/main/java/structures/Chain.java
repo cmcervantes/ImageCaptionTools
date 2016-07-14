@@ -12,10 +12,9 @@ import java.util.Set;
  *
  * @author ccervantes
  */
-public class Chain
+public class Chain extends Annotation
 {
     private String _ID;
-    private String _docID;
     private Set<Mention> _mentionSet;
     private Set<BoundingBox> _boxSet;
     public boolean isScene;
@@ -53,7 +52,6 @@ public class Chain
     }
 
     /**Getters*/
-    public String getDocID(){return _docID;}
     public String getID(){return _ID;}
     public Set<Mention> getMentionSet(){return _mentionSet;}
     public Set<BoundingBox> getBoundingBoxSet(){return _boxSet;}
@@ -97,6 +95,7 @@ public class Chain
      *
      * @return  - key-value string of chain attributes
      */
+    @Override
     public String toDebugString()
     {
         String[] keys = {"docID", "ID", "numMentions",
@@ -104,5 +103,15 @@ public class Chain
         Object[] vals = {_docID, _ID, _mentionSet.size(),
                          _boxSet.size(), isScene};
         return StringUtil.toKeyValStr(keys, vals);
+    }
+
+    /**Returns a dataset-unique ID for this chain, in the form
+     * docID;chain:ID
+     *
+     * @return
+     */
+    public String getUniqueID()
+    {
+        return _docID + ";chain:" + _ID;
     }
 }

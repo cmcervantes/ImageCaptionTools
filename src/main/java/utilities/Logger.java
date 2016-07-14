@@ -49,15 +49,12 @@ public class Logger
      */
     public static void log(String format, Object... args)
     {
-        if(verbose)
-        {
+        if(verbose) {
             String formatStr = "[%.2f] " + format + "\n";
             Object[] completeArgs = new Object[args.length+1];
             completeArgs[0] = (System.currentTimeMillis() - startTS)/1000.0;
             for(int i=0; i<args.length; i++)
-            {
                 completeArgs[i+1] = args[i];
-            }
             System.out.printf(formatStr, completeArgs);
         }
     }
@@ -104,11 +101,13 @@ public class Logger
     private static boolean canLogStatus()
     {
         long currentTS = System.currentTimeMillis();
-        if(lastLogTS == 0)
-            lastLogTS = currentTS;
-        if(currentTS >= lastLogTS + _statusDelay * 1000.0){
-            lastLogTS = currentTS;
-            return true;
+        if(verbose){
+            if(lastLogTS == 0)
+                lastLogTS = currentTS;
+            if(currentTS >= lastLogTS + _statusDelay * 1000.0){
+                lastLogTS = currentTS;
+                return true;
+            }
         }
         return false;
     }
@@ -127,8 +126,7 @@ public class Logger
      */
     public static void log(String message)
     {
-        if(verbose)
-        {
+        if(verbose) {
             System.out.printf("[%07.2f] %s\n",
                     (System.currentTimeMillis() - startTS)/1000.0,
                     message);

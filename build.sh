@@ -34,11 +34,14 @@ if [ "$HELP" = true ]; then
     echo "$usage"
     exit
 fi
+#mvn install:install-file -Dfile=stanford-english-corenlp-2016-01-10-models.jar -DgroupId=edu.stanford.nlp -DartifactId=stanford-models -Dversion=3.6.0 -Dpackaging=jar > build.log
 
 if [ "$ONLINE" = true ]; then
     mvn clean package > build.log
 else
     mvn --offline clean package > build.log
 fi
+mvn install > build.log
+mvn deploy > build.log
 
 grep "^\[ERROR\]" build.log

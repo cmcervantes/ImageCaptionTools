@@ -18,7 +18,7 @@ import java.util.List;
 public class Document
 {
     private String _ID;
-    private Set<Chain> _chainSet;
+    private Map<String, Chain> _chainDict;
     private List<Caption> _captionList;
 
     public int height;
@@ -33,7 +33,7 @@ public class Document
      */
     public Document(String sentenceFilename, String annotationFilename)
     {
-        _ID = StringUtil.getFilenameFromPath(sentenceFilename);
+        _ID = StringUtil.getFilenameFromPath(sentenceFilename) + ".jpg";
         crossVal = -1;
         _captionList = new ArrayList<>();
 
@@ -76,12 +76,24 @@ public class Document
         initChains();
     }
 
+    /**Document constructor primarily used for loading
+     * Documents from a database
+     *
+     * @param ID
+     */
+    public Document(String ID)
+    {
+        _ID = ID;
+        _chainDict = new HashMap<>();
+        _captionList = new ArrayList<>();
+    }
+
     /**Initializes the set of chains from the mentions in
      * the caption list
      */
     private void initChains()
     {
-        Map<String, Chain> chainDict = new HashMap<>();
+        _chainDict = new HashMap<>();
         for(Caption c : _captionList){
             for(Mention m : c.getMentionList()){
                 String chainID = m.getChainID();
@@ -89,18 +101,17 @@ public class Document
                 //ignore mentions that don't have chain IDs or
                 //are mapped to 0 (nonvis)
                 if(chainID != null && !chainID.equals("0")){
-                    if(!chainDict.containsKey(chainID))
-                        chainDict.put(chainID, new Chain(_ID, chainID));
-                    chainDict.get(chainID).addMention(m);
+                    if(!_chainDict.containsKey(chainID))
+                        _chainDict.put(chainID, new Chain(_ID, chainID));
+                    _chainDict.get(chainID).addMention(m);
                 }
             }
         }
-        _chainSet = new HashSet<>(chainDict.values());
     }
 
     /* Getters */
     public String getID(){return _ID;}
-    public Set<Chain> getChainSet(){return _chainSet;}
+    public Set<Chain> getChainSet(){return new HashSet<>(_chainDict.values());}
     public List<Caption> getCaptionList(){return _captionList;}
     public boolean getIsTest(){ return crossVal == 2;}
     public boolean getIsTrain(){ return crossVal == 1;}
@@ -119,32 +130,66 @@ public class Document
         return mentionList;
     }
 
-    /**Adds the given bounding box to all the specified chain IDs
+    /**Returns the Caption with the given index; null
+     * if the Caption was not found
      *
-     * @param b
-     * @param assocChainIDs
+     * @param idx
+     * @return
      */
-    public void addBoundingBox(BoundingBox b, Collection<String> assocChainIDs)
+    public Caption getCaption(int idx)
     {
-        for(String chainID : assocChainIDs){
-            for(Chain c : _chainSet)
-                if(c.getID().equals(chainID))
-                    c.addBoundingBox(b);
-        }
+        //check the given idx, in case we can
+        //directly pull the caption from the list
+        if(idx < _captionList.size())
+            if(_captionList.get(idx).getIdx() == idx)
+                return _captionList.get(idx);
+
+        //search the caption list for one
+        //with that idx
+        for(Caption c : _captionList)
+            if(c.getIdx() == idx)
+                return c;
+        return null;
     }
 
-    /**Sets the chain with the given chain IDs as scene chains;
-     * originally written to ease interfacing with bounding box XML files
+    /**Returns the complete set of bounding boxes for this
+     * image
      *
-     * @param chainIDs
+     * @return - The set of BoundingBox objects
      */
-    public void setSceneChain(Collection<String> chainIDs)
+    public Set<BoundingBox> getBoundingBoxSet()
     {
-        for(String chainID : chainIDs){
-            for(Chain c : _chainSet)
-                if(c.getID().equals(chainID))
-                    c.isScene = true;
+        Set<BoundingBox> boxSet = new HashSet<>();
+        _chainDict.values().forEach(c -> boxSet.addAll(c.getBoundingBoxSet()));
+        return boxSet;
+    }
+
+    /**Returns a list of coref strings for this document's captions,
+     * given the set of predicted chains
+     *
+     * @param predChainSet
+     * @return
+     */
+    public List<String> getPredictedCorefStrings(Set<Chain> predChainSet)
+    {
+        //create a mapping of [captionIdx -> [tokenIdx -> predChainID]]
+        Map<Integer, Map<Integer, String>> capTokenChainDict = new HashMap<>();
+        for(Chain c : predChainSet){
+            for(Mention m : c.getMentionSet()){
+                int captionIdx = m.getCaptionIdx();
+                if(!capTokenChainDict.containsKey(captionIdx))
+                    capTokenChainDict.put(captionIdx, new HashMap<>());
+
+                for(Token t : m.getTokenList())
+                    capTokenChainDict.get(captionIdx).put(t.getIdx(), c.getID());
+            }
         }
+
+        //get predicted coref strings for this main.java.document with this chain set
+        List<String> captionCorefStrList = new ArrayList<>();
+        for(Caption c : _captionList)
+            captionCorefStrList.add(c.toCorefString(capTokenChainDict.get(c.getIdx())));
+        return captionCorefStrList;
     }
 
     /**Returns the area of this image
@@ -167,7 +212,7 @@ public class Document
         //first, let's build a mapping of pixels that
         //occur in our boxes
         Set<Rectangle> recSet = new HashSet<>();
-        for(Chain c : _chainSet)
+        for(Chain c : _chainDict.values())
             for(BoundingBox b : c.getBoundingBoxSet())
                 recSet.add(b.getRec());
 
@@ -203,7 +248,7 @@ public class Document
      */
     public Set<BoundingBox> getBoxSetForMention(Mention m)
     {
-        for(Chain c : _chainSet)
+        for(Chain c : _chainDict.values())
             if(c.getMentionSet().contains(m))
                 return c.getBoundingBoxSet();
         return null;
@@ -217,23 +262,96 @@ public class Document
      */
     public Set<Mention> getMentionSetForBox(BoundingBox b)
     {
-        Set<Mention> mentionSet = new HashSet<>();
-        for(Chain c : _chainSet)
+        for(Chain c : _chainDict.values())
             if(c.getBoundingBoxSet().contains(b))
                 return c.getMentionSet();
         return null;
     }
 
-    /**Returns the complete set of bounding boxes for this
-     * image
+    /**Adds the given bounding box to all the specified chain IDs
      *
-     * @return - The set of BoundingBox objects
+     * @param b
+     * @param assocChainIDs
      */
-    public Set<BoundingBox> getBoundingBoxSet()
+    public void addBoundingBox(BoundingBox b, Collection<String> assocChainIDs)
     {
-        Set<BoundingBox> boxSet = new HashSet<>();
-        _chainSet.forEach(c -> boxSet.addAll(c.getBoundingBoxSet()));
-        return boxSet;
+        for(String chainID : assocChainIDs){
+            for(Chain c :_chainDict.values())
+                if(c.getID().equals(chainID))
+                    c.addBoundingBox(b);
+        }
+    }
+
+    /**Adds the given Caption to the internal list
+     * in the position determined by caption index;
+     * originally written for use in creating
+     * Documents from a database
+     *
+     * @param c
+     */
+    public void addCaption(Caption c)
+    {
+        int insertionIdx = Annotation.getInsertionIdx(_captionList, c);
+        _captionList.add(insertionIdx, c);
+    }
+
+    /**Adds the given Chain to the Document;
+     * originally intended for use when building
+     * Documents from a database
+     *
+     * @param c
+     */
+    public void addChain(Chain c)
+    {
+        _chainDict.put(c.getID(), c);
+    }
+
+    /**Adds the given Mention to its owning Chain
+     *
+     * @param m
+     */
+    public void addMentionToChain(Mention m)
+    {
+        //add the mention to its chain
+        _chainDict.get(m.getChainID()).addMention(m);
+    }
+
+    /**Sets the chain with the given chain IDs as scene chains;
+     * originally written to ease interfacing with bounding box XML files
+     *
+     * @param chainIDs
+     */
+    public void setSceneChain(Collection<String> chainIDs)
+    {
+        for(String chainID : chainIDs){
+            for(Chain c : _chainDict.values())
+                if(c.getID().equals(chainID))
+                    c.isScene = true;
+        }
+    }
+
+    /**Merges this document with the given document, d, where
+     * d contains bounding boxes assigned to chains with the
+     * same IDs as this; originally implemented for merging
+     * docs based on .coref and Flickr30kEntities files
+     *
+     * @param d
+     */
+    public void loadBoxesFromDocument(Document d)
+    {
+        //get the dimension data from this document
+        height = d.height;
+        width = d.width;
+
+        //grab the boxes from d and add them to our chains
+        for(Chain c : d.getChainSet()){
+            for(BoundingBox b : c.getBoundingBoxSet())
+                _chainDict.get(c.getID()).addBoundingBox(b);
+
+            //Since the box annotations also contain the scene flag,
+            //add that here as well
+            _chainDict.get(c.getID()).isScene = c.isScene;
+        }
     }
 
     /**Returns the key-value string for this mention pair,

@@ -64,8 +64,9 @@ public class XmlIO
                 //box but multiple chains
                 NodeList nameNodeList = e.getElementsByTagName("name");
                 Set<String> assocChainIDs = new HashSet<>();
-                for(int j=0; j<nameNodeList.getLength(); j++)
-                    assocChainIDs.add(nameNodeList.item(j).getTextContent());
+                for(int j=0; j<nameNodeList.getLength(); j++){
+                    assocChainIDs.add(nameNodeList.item(j).getTextContent().split("_")[1]);
+                }
 
                 int boxID = -1;
                 Node node_box = e.getElementsByTagName("bndbox").item(0);
@@ -149,7 +150,7 @@ public class XmlIO
                     //remove this accounted-for chain from the set
                     chainSceneDict.remove(chainID);
                 }
-                Element bndbx = doc.createElement("bndbx");
+                Element bndbx = doc.createElement("bndbox");
                 object.appendChild(bndbx);
                 Element xmin = doc.createElement("xmin");
                 xmin.appendChild(doc.createTextNode(String.valueOf(b.getXMin())));
@@ -181,7 +182,7 @@ public class XmlIO
                 Element scene = doc.createElement("scene");
                 scene.appendChild(doc.createTextNode(""+isScene));
                 object.appendChild(scene);
-                Element bndbx = doc.createElement("nobndbx");
+                Element bndbx = doc.createElement("nobndbox");
                 bndbx.appendChild(doc.createTextNode("1"));
                 object.appendChild(bndbx);
             }

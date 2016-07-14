@@ -15,7 +15,7 @@ import java.util.*;
  * NP chunks.
  *
  */
-public class Mention
+public class Mention extends Annotation
 {
     //Word lists, initialized with initWordLists()
     private static Set<String> _massNouns;
@@ -27,85 +27,109 @@ public class Mention
 
     //member variables, set internally or during creation
     private int _captionIdx;
-    private int _idx; //the position in the caption (the Nth mention)
-    private String _docID;
     private List<Token> _tokenList;
     private List<Chunk> _chunkList;
     private String _chainID;
     private Cardinality _card;
     private String _lexType;
 
-    /**Default Mention constructor, used when all core information
-     * is available
-     *
-     * @param docID
-     * @param captionIdx
-     * @param idx
-     * @param chunkList
-     * @param tokenList
-     * @param chainID
-     * @param lexicalType
-     */
-    public Mention(String docID, int captionIdx, int idx,
-                   List<Chunk> chunkList, List<Token> tokenList,
-                   String chainID, String lexicalType)
-    {
-        _docID = docID;
-        _captionIdx = captionIdx;
-        _idx = idx;
-        _chunkList = new ArrayList<>(chunkList);
-        _tokenList = new ArrayList<>(tokenList);
-        _chainID = chainID;
-        _lexType = lexicalType;
-        initCardinality();
-    }
-
     /**Mention constructor, used when lexical types are not set
      * and must be found in lexicons; originally implemented for
      * loading Mentions from .coref strings
-     *
-     * @param docID
+     *  @param docID
      * @param captionIdx
      * @param idx
-     * @param chunkList
-     * @param tokenList
      * @param chainID
+     * @param tokenList
+     * @param chunkList
      */
     public Mention(String docID, int captionIdx, int idx,
-                   List<Chunk> chunkList, List<Token> tokenList,
-                   String chainID)
+                   String chainID, List<Token> tokenList,
+                   List<Chunk> chunkList)
     {
-        _docID = docID;
-        _captionIdx = captionIdx;
-        _idx = idx;
-        _chunkList = new ArrayList<>(chunkList);
-        _tokenList = new ArrayList<>(tokenList);
-        _chainID = chainID;
-        initLexicalType();
-        initCardinality();
+        init(docID, captionIdx, idx, chainID,
+             tokenList, chunkList, null, null);
     }
 
     /**Mention constructor, used when chunks are not available;
      * originally implemented for loading Mentions from
      * entities strings
+     *  @param docID
+     * @param captionIdx
+     * @param idx
+     * @param chainID
+     * @param tokenList
+     */
+    public Mention(String docID, int captionIdx, int idx,
+                   String chainID, List<Token> tokenList,
+                   String lexicalType)
+    {
+        init(docID, captionIdx, idx, chainID,
+             tokenList, null, lexicalType, null);
+    }
+
+    /**Constructs a Mention populating all internal fields;
+     * originally written for use when loading Documents
+     * from a database
      *
      * @param docID
      * @param captionIdx
      * @param idx
-     * @param tokenList
      * @param chainID
+     * @param tokenList
+     * @param chunkList
+     * @param lexicalType
+     * @param card
      */
     public Mention(String docID, int captionIdx, int idx,
-                   List<Token> tokenList, String chainID,
-                   String lexicalType)
+                   String chainID, List<Token> tokenList,
+                   List<Chunk> chunkList, String lexicalType,
+                   Cardinality card)
+    {
+        init(docID, captionIdx, idx, chainID,
+             tokenList, chunkList, lexicalType, card);
+    }
+
+    /**Private initializer for this mention
+     *
+     * @param docID
+     * @param captionIdx
+     * @param idx
+     * @param chainID
+     * @param tokenList
+     * @param chunkList
+     * @param lexicalType
+     * @param card
+     */
+    private void init(String docID, int captionIdx, int idx,
+                      String chainID, List<Token> tokenList,
+                      List<Chunk> chunkList, String lexicalType,
+                      Cardinality card)
     {
         _docID = docID;
         _captionIdx = captionIdx;
         _idx = idx;
+        if(chunkList == null)
+            _chunkList = new ArrayList<>();
+        else
+            _chunkList = new ArrayList<>(chunkList);
         _tokenList = new ArrayList<>(tokenList);
         _chainID = chainID;
-        _lexType = lexicalType;
-        initCardinality();
+        if(lexicalType == null)
+            initLexicalType();
+        else
+            _lexType = lexicalType;
+        if(card == null){
+            //if we haven't initialized the collective noun
+            //list (as is the case when we're loading mentions
+            //from a database), set this card as null
+            if(_collectiveNouns == null)
+                _card = null;
+            else
+                initCardinality();
+        } else {
+            _card = card;
+        }
     }
 
     /**Initializes the mention's Cardinality, based on the mention's
@@ -170,7 +194,7 @@ public class Mention
             }
         }
         if(_massNouns.contains(headToken.getLemma()) && !containsPrecedingDetOrNum){
-            _card = null;
+            _card = new Cardinality();
             return;
         }
 
@@ -254,9 +278,7 @@ public class Mention
     }
 
     /* Getters */
-    public String getDocID(){return _docID;}
     public int getCaptionIdx(){return _captionIdx;}
-    public int getIdx(){return _idx;}
     public Cardinality getCardinality(){return _card;}
     public Token getHead(){return _tokenList.get(_tokenList.size()-1);}
     public List<Token> getTokenList(){return _tokenList;}
@@ -276,13 +298,13 @@ public class Mention
     }
 
     /**Returns a dataset-unique ID for this mention, in the form
-     * docID#capIdx#mentionIdx
+     * docID#capIdx;mention:idx
      *
      * @return
      */
     public String getUniqueID()
     {
-        return _docID + "#" + _captionIdx + "#" + _idx;
+        return _docID + "#" + _captionIdx + ";mention:" + _idx;
     }
 
     /**Returns this mention's pronoun type, based on the
@@ -343,6 +365,20 @@ public class Mention
     public String toString()
     {
         return StringUtil.listToString(_tokenList, " ");
+    }
+
+    /**Returns this mention's attributes as a key:value; string
+     *
+     * @return  - key-value string of mention attributes
+     */
+    @Override
+    public String toDebugString()
+    {
+        String[] keys = {"captionIdx", "chainID", "cardinality",
+                         "lexicalType", "numTokens", "numChunks"};
+        Object[] vals = {_captionIdx, _chainID, _card.toString(),
+                         _lexType, _tokenList.size(), _chunkList.size()};
+        return StringUtil.toKeyValStr(keys, vals);
     }
 
     /**Function to initialize static word lists;

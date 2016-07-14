@@ -5,13 +5,13 @@ import utilities.StringUtil;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- *
+/**Chunks serve as collections of Tokens
+ * with a particular type (NP, VP, etc)
  */
-public class Chunk
+public class Chunk extends Annotation
 {
+    private int _captionIdx;
     private String _chunkType;
-    private int _idx;
     private List<Token> _tokenList;
 
     /**Default Chunk constructor
@@ -20,17 +20,31 @@ public class Chunk
      * @param chunkType
      * @param tokenList
      */
-    public Chunk(int idx, String chunkType, List<Token> tokenList)
+    public Chunk(String docID, int captionIdx,
+                 int idx, String chunkType,
+                 List<Token> tokenList)
     {
+        _docID = docID;
+        _captionIdx = captionIdx;
         _idx = idx;
         _chunkType = chunkType;
         _tokenList = new ArrayList<>(tokenList);
     }
 
     /* Getters */
-    public int getIdx(){return _idx;}
     public String getChunkType(){return _chunkType;}
     public List<Token> getTokenList(){return _tokenList;}
+
+    /**Returns the token indices of the tokens at the
+     * start and end of this chunk
+     *
+     * @return
+     */
+    public int[] getTokenRange()
+    {
+        return new int[]{_tokenList.get(0).getIdx(),
+                _tokenList.get(_tokenList.size()-1).getIdx()};
+    }
 
     /**The text of this chunk
      *
@@ -51,5 +65,15 @@ public class Chunk
         String[] keys = {"idx", "chunkType", "text"};
         Object[] values = {_idx, _chunkType, this.toString()};
         return StringUtil.toKeyValStr(keys, values);
+    }
+
+    /**Returns a dataset-unique ID for this chunk, in the form
+     * docID#capIdx;chunk:idx
+     *
+     * @return
+     */
+    public String getUniqueID()
+    {
+        return _docID + "#" + _captionIdx + ";chunk:" + _idx;
     }
 }

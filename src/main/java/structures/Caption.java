@@ -89,8 +89,10 @@ public class Caption extends Annotation
         _chunkList.add(insertionIdx, ch);
 
         //associates this chunk's tokens with this index
-        for(int i=startTokenIdx; i<= endTokenIdx; i++)
+        for(int i=startTokenIdx; i<= endTokenIdx; i++){
             _tokenList.get(i).chunkIdx = chunkIdx;
+            _tokenList.get(i).chunkType = chunkType;
+        }
     }
 
     /**Adds a new Mention with the given attributes and
@@ -124,8 +126,10 @@ public class Caption extends Annotation
         _mentionList.add(insertionIdx, m);
 
         //associates this mention's tokens with this index
-        for(int i=startTokenIdx; i<= endTokenIdx; i++)
+        for(int i=startTokenIdx; i<= endTokenIdx; i++) {
             _tokenList.get(i).mentionIdx = idx;
+            _tokenList.get(i).chainID = chainID;
+        }
 
         return m;
     }
@@ -364,13 +368,13 @@ public class Caption extends Annotation
         StringBuilder sb = new StringBuilder();
         int prevChunkIdx = -1;
         for(Token t : _tokenList){
-            String chunkType = t.getChunkType();
+            String chunkType = t.chunkType;
             int chunkIdx = t.chunkIdx;
             if(chunkType == null && includeChunklessTokens){
                 sb.append(t.getText());
                 sb.append(" ");
             } else if(chunkType != null && chunkIdx != prevChunkIdx){
-                sb.append(t.getChunkType());
+                sb.append(t.chunkType);
                 sb.append(" ");
             }
             prevChunkIdx = t.chunkIdx;
@@ -388,9 +392,8 @@ public class Caption extends Annotation
     public String toCorefString()
     {
         Map<Integer, String> tokenChainDict = new HashMap<>();
-        for(Mention m : _mentionList)
-            for(Token t : m.getTokenList())
-                tokenChainDict.put(t.getIdx(), t.getChainID());
+        for(Token t : _tokenList)
+            tokenChainDict.put(t.getIdx(), t.chainID);
         return toCorefString(tokenChainDict);
     }
 
@@ -424,7 +427,7 @@ public class Caption extends Annotation
             //the type has been stripped. In these cases we treat the
             //chunk as though it's invalid (to prevent it from
             //being bracketed
-            if(t.getChunkType() == null || t.getChunkType().equalsIgnoreCase("null"))
+            if(t.chunkType == null || t.chunkType.equalsIgnoreCase("null"))
                 currentChunkIdx = -1;
 
             currentEntityIdx = t.mentionIdx;
@@ -472,12 +475,12 @@ public class Caption extends Annotation
             }
             if(openChunk){
                 sb.append("[");
-                sb.append(t.getChunkType());
+                sb.append(t.chunkType);
                 sb.append(" ");
             }
 
             boolean internalOf = false;
-            if(t.getChunkType() != null && t.getChunkType().equals("NP") && t.getText().equals("of")){
+            if(t.chunkType != null && t.chunkType.equals("NP") && t.getText().equals("of")){
                 sb.append("[PP ");
                 internalOf = true;
             }
@@ -519,7 +522,7 @@ public class Caption extends Annotation
     {
         Map<Integer, String> tokenChainDict = new HashMap<>();
         for(Token t : _tokenList)
-            tokenChainDict.put(t.getIdx(), t.getChainID());
+            tokenChainDict.put(t.getIdx(), t.chainID);
         return toEntitiesString(tokenChainDict, typeDict);
     }
 
@@ -672,7 +675,7 @@ public class Caption extends Annotation
             //get the gold token data
             String label_gold = "O";
             Token t = _tokenList.get(tokenIdx);
-            String cType = t.getChunkType();
+            String cType = t.chunkType;
             int cIdx = t.chunkIdx;
             if(cType != null && !cType.isEmpty())
                 label_gold = cType;
@@ -689,7 +692,7 @@ public class Caption extends Annotation
             String label_pred = "";
             if(predTokens != null){
                 Token tPrime = predTokens.get(tokenIdx);
-                String cTypePrime = tPrime.getChunkType();
+                String cTypePrime = tPrime.chunkType;
                 int cIdxPrime = tPrime.chunkIdx;
 
                 //if this chunk type is null or empty, the str is O
@@ -778,7 +781,7 @@ public class Caption extends Annotation
             Token t = _tokenList.get(tIdx);
             int currentChunkIdx = t.chunkIdx;
             int currentEntityIdx = t.mentionIdx;
-            String currentChunkType = t.getChunkType();
+            String currentChunkType = t.chunkType;
 
             //this token is part of the currently in-progress
             //chunk if the indices are the same
@@ -826,7 +829,7 @@ public class Caption extends Annotation
                     List<Token> tokenSubList = new ArrayList<>();
                     chunkSubList.forEach(c -> tokenSubList.addAll(c.getTokenList()));
                     Mention m = new Mention(_docID, _idx, prevEntityIdx,
-                            tokenSubList.get(0).getChainID(), tokenSubList, chunkSubList
+                            tokenSubList.get(0).chainID, tokenSubList, chunkSubList
                     );
                     _mentionList.add(m);
                     startIdx_chunk = -1;

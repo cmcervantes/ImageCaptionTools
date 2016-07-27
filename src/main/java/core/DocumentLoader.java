@@ -171,8 +171,8 @@ public class DocumentLoader
                 int startTokenIdx = rs.getInt("start_token_idx");
                 int endTokenIdx = rs.getInt("end_token_idx");
                 String chunkType = rs.getString("chunk_type");
-                Caption c = docDict.get(imgID).getCaption(captionIdx);
-                c.addChunk(chunkIdx, chunkType, startTokenIdx, endTokenIdx);
+                docDict.get(imgID).getCaption(captionIdx).addChunk(chunkIdx,
+                        chunkType, startTokenIdx, endTokenIdx);
             }
 
             Logger.log("Loading bounding boxes from <box>");

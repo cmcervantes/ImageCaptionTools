@@ -12,13 +12,13 @@ public class Token extends Annotation
 {
     private String _text;
     private int _captionIdx;
-    private String _chunkType;
     private String _posTag;
-    private String _chainID;
     private String _lemma;
 
     public int chunkIdx;
     public int mentionIdx;
+    public String chainID;
+    public String chunkType;
 
     /**Creates a new Token object with all internal fields
      *
@@ -42,11 +42,11 @@ public class Token extends Annotation
         _idx = idx;
         _text = text;
         _lemma = lemma;
+        _posTag = posTag;
         this.chunkIdx = chunkIdx == null ? -1 : chunkIdx;
         this.mentionIdx = mentionIdx == null ? -1 : mentionIdx;
-        _chunkType = chunkType;
-        _posTag = posTag;
-        _chainID = chainID;
+        this.chunkType = chunkType;
+        this.chainID = chainID;
     }
 
     /**Token constructor originally written with for
@@ -67,7 +67,9 @@ public class Token extends Annotation
         _idx = idx;
         _text = text;
         this.mentionIdx = mentionIdx == null ? -1 : mentionIdx;
-        _chainID = chainID;
+        this.chainID = chainID;
+        chunkIdx = -1;
+        chunkType = null;
     }
 
     /**Token constructor specifying token-specific
@@ -90,6 +92,10 @@ public class Token extends Annotation
         _text = text;
         _lemma = lemma;
         _posTag = posTag;
+        chunkIdx = -1;
+        mentionIdx = -1;
+        chunkType = null;
+        chainID = null;
     }
 
     /**Returns the original text of this token
@@ -112,8 +118,8 @@ public class Token extends Annotation
         String[] keys = {"docID", "capIdx", "idx", "chunkType",
                          "pos", "chainID", "chunkIdx",
                          "mentionIdx", "lemma", "text"};
-        Object[] vals = {_docID, _captionIdx, _idx, _chunkType,
-                        _posTag, _chainID, chunkIdx,
+        Object[] vals = {_docID, _captionIdx, _idx, chunkType,
+                        _posTag, chainID, chunkIdx,
                 mentionIdx, _lemma, _text};
         return StringUtil.toKeyValStr(keys, vals);
     }
@@ -142,7 +148,5 @@ public class Token extends Annotation
     public String getText(){return _text;}
     public String getLemma(){return _lemma;}
     public int getCaptionIdx(){return _captionIdx;}
-    public String getChunkType(){return _chunkType;}
     public String getPosTag(){return _posTag;}
-    public String getChainID(){return _chainID;}
 }

@@ -71,6 +71,7 @@ public class XmlIO
                 int boxID = -1;
                 Node node_box = e.getElementsByTagName("bndbox").item(0);
                 Node node_scene = e.getElementsByTagName("scene").item(0);
+                Node node_nobox = e.getElementsByTagName("nobndbox").item(0);
                 if(node_box != null) {
                     boxID = boxCounter;
                     Element subElement = (Element)node_box;
@@ -82,7 +83,10 @@ public class XmlIO
                 }
                 if(node_scene != null)
                     if(Integer.parseInt(node_scene.getTextContent()) == 1)
-                        d.setSceneChain(assocChainIDs);
+                        d.setSceneChains(assocChainIDs);
+                if(node_nobox != null)
+                    if(Integer.parseInt(node_nobox.getTextContent()) == 1)
+                        d.setOrigNoboxChains(assocChainIDs);
 
                 if(boxID > -1)
                     boxCounter++;

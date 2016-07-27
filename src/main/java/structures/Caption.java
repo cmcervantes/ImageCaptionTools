@@ -388,8 +388,9 @@ public class Caption extends Annotation
     public String toCorefString()
     {
         Map<Integer, String> tokenChainDict = new HashMap<>();
-        for(Token t : _tokenList)
-            tokenChainDict.put(t.getIdx(), t.getChainID());
+        for(Mention m : _mentionList)
+            for(Token t : m.getTokenList())
+                tokenChainDict.put(t.getIdx(), t.getChainID());
         return toCorefString(tokenChainDict);
     }
 

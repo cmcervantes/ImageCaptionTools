@@ -18,9 +18,10 @@ public class Chain extends Annotation
     private Set<Mention> _mentionSet;
     private Set<BoundingBox> _boxSet;
     public boolean isScene;
+    public boolean isOrigNobox;
 
     /**Default Chain constructor assumes mentions and boxes
-     * will be added to the sets after initializtion
+     * will be added to the sets after initialization
      *
      * @param docID
      * @param ID
@@ -31,6 +32,8 @@ public class Chain extends Annotation
         _ID = ID;
         _mentionSet = new HashSet<>();
         _boxSet = new HashSet<>();
+        isScene = false;
+        isOrigNobox = false;
     }
 
     /**Adds the given Mention to the chain's Mention set
@@ -99,9 +102,9 @@ public class Chain extends Annotation
     public String toDebugString()
     {
         String[] keys = {"docID", "ID", "numMentions",
-                         "numBoxes", "isScene"};
+                         "numBoxes", "isScene", "isOrigNobox"};
         Object[] vals = {_docID, _ID, _mentionSet.size(),
-                         _boxSet.size(), isScene};
+                         _boxSet.size(), isScene, isOrigNobox};
         return StringUtil.toKeyValStr(keys, vals);
     }
 

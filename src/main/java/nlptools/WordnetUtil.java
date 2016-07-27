@@ -12,7 +12,7 @@ import utilities.Logger;
 import java.io.File;
 import java.util.*;
 
-/**The WordnetClerk - unlike everything else
+/**The WordnetUtil - unlike everything else
  * currently in the legacy package - is actually
  * meant to be instantiated! The resulting
  * object will contain a Wordnet dictionary
@@ -20,7 +20,7 @@ import java.util.*;
  *
  * @author ccervantes
  */
-public class WordnetClerk
+public class WordnetUtil
 {
     private WordnetStemmer wnStemmer;
     private IRAMDictionary wordnetDict;
@@ -28,7 +28,7 @@ public class WordnetClerk
     /**Constructor that creates the WordNet dictionary
      * using a local wordnet directory.
      */
-    public WordnetClerk(String wordnetDirPath)
+    public WordnetUtil(String wordnetDirPath)
     {
         File wordnetDir = new File(wordnetDirPath);
         wordnetDict = new RAMDictionary(wordnetDir,

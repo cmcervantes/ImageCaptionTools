@@ -316,18 +316,30 @@ public class Document
         _chainDict.get(m.getChainID()).addMention(m);
     }
 
-    /**Sets the chain with the given chain IDs as scene chains;
+    /**Sets the chains with the given chain IDs as scene chains;
      * originally written to ease interfacing with bounding box XML files
      *
      * @param chainIDs
      */
-    public void setSceneChain(Collection<String> chainIDs)
+    public void setSceneChains(Collection<String> chainIDs)
     {
-        for(String chainID : chainIDs){
+        for(String chainID : chainIDs)
             for(Chain c : _chainDict.values())
                 if(c.getID().equals(chainID))
                     c.isScene = true;
-        }
+    }
+
+    /**Sets the chains with the given chain IDs as an original nobox chains;
+     * originally written to ease interfacing with bounding box XML files
+     *
+     * @param chainIDs
+     */
+    public void setOrigNoboxChains(Collection<String> chainIDs)
+    {
+        for(String chainID : chainIDs)
+            for(Chain c : _chainDict.values())
+                if(c.getID().equals(chainID))
+                    c.isOrigNobox = true;
     }
 
     /**Merges this document with the given document, d, where
@@ -351,7 +363,22 @@ public class Document
             //Since the box annotations also contain the scene flag,
             //add that here as well
             _chainDict.get(c.getID()).isScene = c.isScene;
+            _chainDict.get(c.getID()).isOrigNobox = c.isOrigNobox;
         }
+    }
+
+    /**Returns a list of strings representing this Document in the
+     * CONLL 2012 format, the specifications for which can be found [here][link]
+     *
+     * [link]: http://conll.cemantix.org/2012/data.html
+     *
+     * @return
+     */
+    public List<String> toConll2012()
+    {
+        Set<Chain> chainSet = new HashSet<>(_chainDict.values());
+        chainSet.remove(_chainDict.get("0"));
+        return Document.toConll2012(this, chainSet);
     }
 
     /**Returns the key-value string for this mention pair,
@@ -401,5 +428,82 @@ public class Document
         vals.add(m2.getCaptionIdx());
         vals.add(m2.getIdx());
         return StringUtil.toKeyValStr(keys, vals);
+    }
+
+    /**Returns a list of strings representing the given Document -- treating
+     * the given chainSet as the source of coreferent information -- in the
+     * CONLL 2012 format, the specifications for which can be found [here][link]
+     *
+     * [link]: http://conll.cemantix.org/2012/data.html
+     *
+     * @param d
+     * @param chainSet
+     * @return
+     */
+    public static List<String> toConll2012(Document d, Collection<Chain> chainSet)
+    {
+        //Associate mention tokens with the chains to which they belong
+        Map<Token, String> tokenChainDict_start = new HashMap<>();
+        Map<Token, String> tokenChainDict_end = new HashMap<>();
+        for(Chain c : chainSet){
+            for(Mention m : c.getMentionSet()){
+                tokenChainDict_start.put(m.getTokenList().get(0), c.getID());
+                tokenChainDict_end.put(m.getTokenList().get(m.getTokenList().size()-1), c.getID());
+            }
+        }
+
+        //Iterate through the Document's tokens, adding lines to the set
+        List<String> lineList = new ArrayList<>();
+        int tokenIdx = 0;
+        for(Caption c : d.getCaptionList()){
+            for(Token t : c.getTokenList()){
+                StringBuilder sb = new StringBuilder();
+                sb.append(d.getID());   //Document ID
+                sb.append("\t");
+                sb.append("0");         //Part number
+                sb.append("\t");
+                sb.append(tokenIdx);    //Word number
+                sb.append("\t");
+                sb.append(t.getText()); //the word itself
+                sb.append("\t");
+                sb.append(t.getPosTag());   //part of speech
+                sb.append("\t");
+                sb.append("-");         //parse bit
+                sb.append("\t");
+                sb.append("-");         //predicate lemma
+                sb.append("\t");
+                sb.append("-");         //predicate frameset ID
+                sb.append("\t");
+                sb.append("-");         //word sense
+                sb.append("\t");
+                sb.append("-");         //speaker / author
+                sb.append("\t");
+                sb.append("-");         //named entities
+                sb.append("\t");
+                sb.append("-");         //predicate arguments
+                sb.append("\t");
+                //append the coref information as the final column according to
+                //a) If this is a start token: (chain
+                //b) If this is an end token: chain)
+                //c) If this is a start _and_ end token: (chain)
+                //d) else: -
+                if(tokenChainDict_start.containsKey(t) && tokenChainDict_end.containsKey(t)) {
+                    sb.append("(");
+                    sb.append(tokenChainDict_start.get(t));
+                    sb.append(")");
+                }else if(tokenChainDict_start.containsKey(t)){
+                    sb.append("(");
+                    sb.append(tokenChainDict_start.get(t));
+                } else if(tokenChainDict_end.containsKey(t)){
+                    sb.append(tokenChainDict_end.get(t));
+                    sb.append(")");
+                } else {
+                    sb.append("-");
+                }
+                lineList.add(sb.toString());
+                tokenIdx++;
+            }
+        }
+        return lineList;
     }
 }

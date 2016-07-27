@@ -50,7 +50,7 @@ public class Logger
     public static void log(String format, Object... args)
     {
         if(verbose) {
-            String formatStr = "[%.2f] " + format + "\n";
+            String formatStr = "[%07.2f] " + format + "\n";
             Object[] completeArgs = new Object[args.length+1];
             completeArgs[0] = (System.currentTimeMillis() - startTS)/1000.0;
             for(int i=0; i<args.length; i++)

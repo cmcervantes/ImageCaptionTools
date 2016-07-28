@@ -24,6 +24,7 @@ public class Document
     public int height;
     public int width;
     public int crossVal;
+    public boolean reviewed;
 
     /**Document constructor used for loading Documents from
      * a pair of sentence / annotation files
@@ -35,6 +36,7 @@ public class Document
     {
         _ID = StringUtil.getFilenameFromPath(sentenceFilename) + ".jpg";
         crossVal = -1;
+        reviewed = false;
         _captionList = new ArrayList<>();
 
         //Load the sentence files into Captions
@@ -70,6 +72,8 @@ public class Document
             Logger.log(ex);
         }
         _ID = _captionList.get(0).getDocID();
+        reviewed = false;
+        crossVal = -1;
 
         //initialize our chains, given the captions
         //and their internal mentions
@@ -86,6 +90,8 @@ public class Document
         _ID = ID;
         _chainDict = new HashMap<>();
         _captionList = new ArrayList<>();
+        reviewed = false;
+        crossVal = -1;
     }
 
     /**Initializes the set of chains from the mentions in

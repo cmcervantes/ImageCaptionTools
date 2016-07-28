@@ -104,10 +104,11 @@ public class DocumentLoader
             Logger.log("Initializing Documents from <image>");
             if(crossVal < 0){
                 query = "SELECT img_id, height, width, "+
-                        "cross_val FROM image";
+                        "cross_val, reviewed FROM image";
             } else {
                 query = "SELECT img_id, height, width, "+
-                        "cross_val FROM image WHERE cross_val=" +
+                        "cross_val, reviewed FROM image "+
+                        "WHERE cross_val=" +
                         crossVal;
             }
             rs = conn.query(query);
@@ -116,6 +117,7 @@ public class DocumentLoader
                 d.height = rs.getInt("height");
                 d.width = rs.getInt("width");
                 d.crossVal = rs.getInt("cross_val");
+                d.reviewed = rs.getBoolean("reviewed");
                 docDict.put(d.getID(), d);
             }
 
@@ -336,14 +338,14 @@ public class DocumentLoader
          * like the ID, dimentions, and data split */
         Logger.log("Creating <image>");
         query = "CREATE TABLE IF NOT EXISTS image (img_id VARCHAR(15), "+
-                "height INT, width INT, cross_val "+
+                "height INT, width INT, reviewed TINYINT(1), cross_val "+
                 "TINYINT(1), PRIMARY KEY(img_id));";
         conn.createTable(query);
-        query = insertPrefix + "image(img_id, height, width, cross_val) "+
-                "VALUES (?, ?, ?, ?);";
+        query = insertPrefix + "image(img_id, height, width, reviewed, "+
+                "cross_val) VALUES (?, ?, ?, ?, ?);";
         paramSet = new HashSet<>();
         for(Document d : docSet){
-            Object[] params = {d.getID(), d.height, d.width, d.crossVal};
+            Object[] params = {d.getID(), d.height, d.width, d.reviewed, d.crossVal};
             paramSet.add(params);
         }
         conn.update(query, paramSet, batchSize, numThreads);

@@ -144,6 +144,19 @@ public class Mention extends Annotation
         if(headToken == null || headToken.getPosTag() == null)
             return;
 
+        //if this is a pronoun, initialize its cardinality by lexicon
+        Boolean isPluralPronoun = PRONOUN_TYPE.getIsPlural(this.toString().toLowerCase());
+        if(isPluralPronoun != null){
+            if(isPluralPronoun){
+                _card = new Cardinality(new int[]{1, 0},
+                        new boolean[]{false, true});
+            } else {
+                _card = new Cardinality(new int[]{1, 1},
+                        new boolean[]{false, false});
+            }
+            return;
+        }
+
         /**From a paper draft in which a mention's cardinality - η(m) - is defined
          *
          * Data:
@@ -379,6 +392,29 @@ public class Mention extends Annotation
         Object[] vals = {_captionIdx, _chainID, _card.toString(),
                          _lexType, _tokenList.size(), _chunkList.size()};
         return StringUtil.toKeyValStr(keys, vals);
+    }
+
+    /**Returns whether the lexical types for m1 and m2 match;
+     * 1 if exact match, 0 if no match, and 0.5 if they overlap
+     * inexactly
+     *
+     * @param m1
+     * @param m2
+     * @return
+     */
+    public static double getLexicalTypeMatch(Mention m1, Mention m2)
+    {
+        if(m1._lexType.equals(m2._lexType))
+            return 1.0;
+
+        Set<String> lex_1 = new HashSet<>(Arrays.asList(m1._lexType.split("/")));
+        Set<String> lex_2 = new HashSet<>(Arrays.asList(m2._lexType.split("/")));
+        Set<String> intersection = new HashSet<>(lex_1);
+        intersection.retainAll(lex_2);
+        if(intersection.size() > 0)
+            return 0.5;
+
+        return 0.0;
     }
 
     /**Function to initialize static word lists;

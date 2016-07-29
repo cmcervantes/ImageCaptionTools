@@ -452,4 +452,49 @@ public class Util
         else
             return 1;
     }
+
+    /**Adds the given vectorList together, element by element
+     *
+     * @param vectorList
+     * @return
+     */
+    public static List<Double> vectorAdd(List<List<Double>> vectorList)
+    {
+        List<Double> result = new ArrayList<>(vectorList.get(0));
+        for(int i=1; i<vectorList.size(); i++){
+            List<Double> vec = vectorList.get(i);
+            for(int j=0; j<vec.size(); j++)
+                result.set(j, result.get(j) + vec.get(j));
+        }
+        return result;
+    }
+
+    /**Returns the mean of the given vectorList, element by element
+     *
+     * @param vectorList
+     * @return
+     */
+    public static List<Double> vectorMean(List<List<Double>> vectorList)
+    {
+        List<Double> result = vectorAdd(vectorList);
+        for(int i=0; i<result.size(); i++)
+            result.set(i, result.get(i) / vectorList.size());
+        return result;
+    }
+
+    /**Returns the pointwise multiplication of the given vectorList
+     *
+     * @param vectorList
+     * @return
+     */
+    public static List<Double> vectorPointwiseMult(List<List<Double>> vectorList)
+    {
+        List<Double> result = new ArrayList<>(vectorList.get(0));
+        for(int i=1; i<vectorList.size(); i++){
+            List<Double> vec = vectorList.get(i);
+            for(int j=0; j<vec.size(); j++)
+                result.set(j, result.get(j) * vec.get(j));
+        }
+        return result;
+    }
 }

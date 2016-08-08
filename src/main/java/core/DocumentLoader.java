@@ -18,6 +18,7 @@ public class DocumentLoader
 {
     public static void main(String[] args)
     {
+
     }
 
     /**Returns a set of Documents, based on a .coref file

@@ -266,28 +266,24 @@ public class Mention extends Annotation
      */
     private void initLexicalType()
     {
-        if(_chainID == null || _chainID.equals("0"))
-            _lexType = "notvisual";
-        else {
-            //In order to distinguish between "buffalo" and "water buffalo"
-            //(though, admittedly, they're the same type), we want to
-            //get the lexical type for the longest string that
-            //  - is in the lexicon
-            //  - terminates the mention
-            String type = "other";
-            int matchLength = -1;
-            List<String> lemmas = new ArrayList<>();
-            _tokenList.forEach(t -> lemmas.add(t.getLemma()));
-            String lemmaStr = StringUtil.listToString(lemmas, " ");
+        //In order to distinguish between "buffalo" and "water buffalo"
+        //(though, admittedly, they're the same type), we want to
+        //get the lexical type for the longest string that
+        //  - is in the lexicon
+        //  - terminates the mention
+        String type = "other";
+        int matchLength = -1;
+        List<String> lemmas = new ArrayList<>();
+        _tokenList.forEach(t -> lemmas.add(t.getLemma()));
+        String lemmaStr = StringUtil.listToString(lemmas, " ");
 
-            for (String s : _lexiconDict.keySet()) {
-                if (s.length() >= matchLength && lemmaStr.endsWith(s)) {
-                    type = _lexiconDict.get(s);
-                    matchLength = s.length();
-                }
+        for (String s : _lexiconDict.keySet()) {
+            if (s.length() >= matchLength && lemmaStr.endsWith(s)) {
+                type = _lexiconDict.get(s);
+                matchLength = s.length();
             }
-            _lexType = type;
         }
+        _lexType = type;
     }
 
     /* Getters */
@@ -360,14 +356,16 @@ public class Mention extends Annotation
     public String getGender()
     {
         String normLemma = getHead().getLemma().toLowerCase().trim();
+        String normText = " " + toString().toLowerCase().trim() + " ";
+
         //search for the right hypernym, as well as handling our special cases
         if(normLemma.equals("she") || normLemma.equals("her") ||
                 normLemma.equals("girl") || normLemma.equals("woman") ||
-                normLemma.equals("herself"))
+                normLemma.equals("herself") || normText.contains(" female "))
             return "female";
         else if(normLemma.equals("he") || normLemma.equals("him") ||
                 normLemma.equals("boy") || normLemma.equals("man") ||
-                normLemma.equals("himself"))
+                normLemma.equals("himself") || normText.contains(" male "))
             return "male";
         return "neuter";
     }

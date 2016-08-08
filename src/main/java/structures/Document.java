@@ -395,27 +395,34 @@ public class Document
      * @param mPrime       - Mention in pair
      * @param includeDocID - Whether to include the document _ID in the
      *                       mention pair string
+     * @param enforceOrder - Returns the IDs in the order they were given, rather
+     *                       than by their idx (default)
      * @return             - Mention pair keyvalue string, in the form
      *                       [doc:docID];caption_1:capIdx_1;mention_1:mIdx_1;caption_2:capIdx_2;mention_2:mIdx_2
      */
     public static String getMentionPairStr(Mention m, Mention mPrime,
-                                           boolean includeDocID)
+                                           boolean includeDocID, boolean enforceOrder)
     {
         //determine mention precedence
         Mention m1, m2;
-        if(m.getCaptionIdx() < mPrime.getCaptionIdx()){
+        if(enforceOrder){
             m1 = m;
             m2 = mPrime;
-        } else if(mPrime.getCaptionIdx() < m.getCaptionIdx()){
-            m1 = mPrime;
-            m2 = m;
         } else {
-            if(m.getIdx() < mPrime.getIdx()){
+            if(m.getCaptionIdx() < mPrime.getCaptionIdx()){
                 m1 = m;
                 m2 = mPrime;
-            } else {
+            } else if(mPrime.getCaptionIdx() < m.getCaptionIdx()){
                 m1 = mPrime;
                 m2 = m;
+            } else {
+                if(m.getIdx() < mPrime.getIdx()){
+                    m1 = m;
+                    m2 = mPrime;
+                } else {
+                    m1 = mPrime;
+                    m2 = m;
+                }
             }
         }
 
@@ -426,14 +433,30 @@ public class Document
             keys.add("doc");
             vals.add(m1.getDocID());
         }
-        keys.addAll(Arrays.asList(
-                new String[]{"caption_1", "mention_1",
-                             "caption_2", "mention_2"}));
+        keys.addAll(Arrays.asList("caption_1", "mention_1",
+                "caption_2", "mention_2"));
         vals.add(m1.getCaptionIdx());
         vals.add(m1.getIdx());
         vals.add(m2.getCaptionIdx());
         vals.add(m2.getIdx());
         return StringUtil.toKeyValStr(keys, vals);
+    }
+
+    /**Returns the key-value string for this mention pair,
+     * where order is determined by mention precedence (cap:i;mention:j
+     * always appears before cap:m;mention:n, where i<=m and j<=n)
+     *
+     * @param m            - Mention in pair
+     * @param mPrime       - Mention in pair
+     * @param includeDocID - Whether to include the document _ID in the
+     *                       mention pair string
+     * @return             - Mention pair keyvalue string, in the form
+     *                       [doc:docID];caption_1:capIdx_1;mention_1:mIdx_1;caption_2:capIdx_2;mention_2:mIdx_2
+     */
+    public static String getMentionPairStr(Mention m, Mention mPrime,
+                                           boolean includeDocID)
+    {
+        return getMentionPairStr(m, mPrime, includeDocID, false);
     }
 
     /**Returns a list of strings representing the given Document -- treating

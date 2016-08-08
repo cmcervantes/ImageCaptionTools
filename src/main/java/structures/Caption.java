@@ -549,23 +549,19 @@ public class Caption extends Annotation
         //      types, which we should have set before getting here
         Map<Integer, String> entityTypeDict = new HashMap<>();
         for(Mention m : _mentionList){
-            if(m.getChainID().equals("0")){
-                entityTypeDict.put(m.getIdx(), "notvisual");
-            } else {
-                //take the longest match, distinguishing between
-                //buffalo and water buffalo
-                String type = "other";
-                int matchLength = -1;
-                for(String s : typeDict.keySet()){
-                    if(s.length() >= matchLength){
-                        if(m.toString().endsWith(s)){
-                            type = typeDict.get(s);
-                            matchLength = s.length();
-                        }
+            //take the longest match, distinguishing between
+            //buffalo and water buffalo
+            String type = "other";
+            int matchLength = -1;
+            for(String s : typeDict.keySet()){
+                if(s.length() >= matchLength){
+                    if(m.toString().endsWith(s)){
+                        type = typeDict.get(s);
+                        matchLength = s.length();
                     }
                 }
-                entityTypeDict.put(m.getIdx(), type);
             }
+            entityTypeDict.put(m.getIdx(), type);
         }
 
         StringBuilder sb = new StringBuilder();
@@ -719,7 +715,6 @@ public class Caption extends Annotation
         return conllStrings;
     }
 
-
     /**Searches the dependency tree to find the VP chunk for which
      * the given mention is the subject; null if m is not a subject
      * or if this caption has no clean parse
@@ -735,9 +730,12 @@ public class Caption extends Annotation
             for(DependencyNode n : nodeList) {
                 String relation = n.getRelationToGovernor();
                 if(relation != null && relation.contains("subj")){
-                    Chunk ch = _chunkList.get(n.getGovernor().getToken().chunkIdx);
-                    if (ch.getChunkType().equals("VP"))
-                        subjOf = ch;
+                    int chunkIdx = n.getGovernor().getToken().chunkIdx;
+                    if(chunkIdx >= 0 && chunkIdx < _chunkList.size()){
+                        Chunk ch = _chunkList.get(chunkIdx);
+                        if (ch.getChunkType().equals("VP"))
+                            subjOf = ch;
+                    }
                 }
             }
         }
@@ -759,9 +757,12 @@ public class Caption extends Annotation
             for(DependencyNode n : nodeList) {
                 String relation = n.getRelationToGovernor();
                 if(relation != null && relation.contains("obj")){
-                    Chunk ch = _chunkList.get(n.getGovernor().getToken().chunkIdx);
-                    if (ch.getChunkType().equals("VP"))
-                        objOf = ch;
+                    int chunkIdx = n.getGovernor().getToken().chunkIdx;
+                    if(chunkIdx >= 0 && chunkIdx < _chunkList.size()){
+                        Chunk ch = _chunkList.get(chunkIdx);
+                        if (ch.getChunkType().equals("VP"))
+                            objOf = ch;
+                    }
                 }
             }
         }

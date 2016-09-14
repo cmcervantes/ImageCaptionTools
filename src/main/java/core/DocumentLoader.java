@@ -201,7 +201,7 @@ public class DocumentLoader
                 if(!boxDict.containsKey(imgID))
                     boxDict.put(imgID, new HashMap<>());
                 boxDict.get(imgID).put(boxID,
-                        new BoundingBox(boxID, xMin, yMin, xMax, yMax));
+                        new BoundingBox(imgID, boxID, xMin, yMin, xMax, yMax));
             }
 
             Logger.log("Loading chains from <chain> and associating them with "+
@@ -390,10 +390,18 @@ public class DocumentLoader
         for(Document d : docSet){
             for(Caption c : d.getCaptionList()) {
                 for(Chunk ch : c.getChunkList()){
-                    int[] tokenIndices = ch.getTokenRange();
-                    paramSet.add(new Object[]{d.getID(), c.getIdx(),
-                        ch.getIdx(), tokenIndices[0], tokenIndices[1],
-                        ch.getChunkType()});
+                    //It's possible, in the old version of the data,
+                    //for there to be empty chunks. Log these, but
+                    //ignore them otherwise
+                    if(!ch.toString().isEmpty()){
+                        int[] tokenIndices = ch.getTokenRange();
+                        paramSet.add(new Object[]{d.getID(), c.getIdx(),
+                                ch.getIdx(), tokenIndices[0], tokenIndices[1],
+                                ch.getChunkType()});
+                    } else {
+                        Logger.log("Error: missing chunk %d (doc:%s;cap:%d",
+                                    ch.getIdx(), d.getID(), c.getIdx());
+                    }
                 }
             }
         }
@@ -444,7 +452,7 @@ public class DocumentLoader
         for(Document d : docSet){
             for(Chain c : d.getChainSet()){
                 Set<String> boxIDs = new HashSet<>();
-                c.getBoundingBoxSet().forEach(b -> boxIDs.add(""+b.getID()));
+                c.getBoundingBoxSet().forEach(b -> boxIDs.add(""+b.getIdx()));
                 String boxIdStr = null;
                 if(!boxIDs.isEmpty())
                     boxIdStr = StringUtil.listToString(boxIDs,"|");
@@ -466,7 +474,7 @@ public class DocumentLoader
         paramSet = new HashSet<>();
         for(Document d : docSet){
             for(BoundingBox b : d.getBoundingBoxSet()){
-                paramSet.add(new Object[]{d.getID(), b.getID(), b.getXMin(),
+                paramSet.add(new Object[]{d.getID(), b.getIdx(), b.getXMin(),
                         b.getYMin(), b.getXMax(), b.getYMax()});
             }
         }

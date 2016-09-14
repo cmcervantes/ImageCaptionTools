@@ -1,6 +1,7 @@
 package structures;
 
 import utilities.Logger;
+import utilities.StringUtil;
 
 import java.awt.*;
 
@@ -9,9 +10,8 @@ import java.awt.*;
  *
  * @author ccervantes
  */
-public class BoundingBox
+public class BoundingBox extends Annotation
 {
-    private int _ID;
     private int _xMin;
     private int _yMin;
     private int _xMax;
@@ -21,17 +21,16 @@ public class BoundingBox
 
     /**Basic BoundingBox constructor
      *
-     * @param ID	- BoundingBox _ID
      * @param xMin	- Minimum X coordinate
      * @param yMin	- Minimum Y coordinate
      * @param xMax	- Maximum X coordinate
      * @param yMax	- Maximum Y coordinate
      */
-    public BoundingBox(int ID, int xMin,
-                       int yMin, int xMax,
-                       int yMax)
+    public BoundingBox(String docID, int idx, int xMin,
+                       int yMin, int xMax, int yMax)
     {
-        _ID = ID;
+        _docID = docID;
+        _idx = idx;
         _xMin = xMin;
         _yMin = yMin;
         _xMax = xMax;
@@ -45,13 +44,29 @@ public class BoundingBox
     }
 
     /* Getters */
-    public int getID(){return _ID;}
     public int getXMin(){return _xMin;}
     public int getYMin(){return _yMin;}
     public int getXMax(){return _xMax;}
     public int getYMax(){return _yMax;}
     public Rectangle getRec(){return _rec;}
     public double getArea(){return _area;}
+
+    /**Returns this bounding box's attributes as a key:value; string
+     *
+     * @return  - key-value string of box attributes
+     */
+    @Override
+    public String toDebugString()
+    {
+        String[] keys = {"idx", "xMin", "yMin", "xMax", "yMax"};
+        Object[] vals = {_idx, _xMin, _yMin, _xMax, _yMax};
+        return StringUtil.toKeyValStr(keys, vals);
+    }
+
+    public String getUniqueID()
+    {
+        return _docID + ";box:" + _idx;
+    }
 
     /**Returns whether this bounding box shares the same
      * coordinates as another

@@ -16,10 +16,8 @@ import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
 import java.io.File;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
+import java.io.StringWriter;
+import java.util.*;
 
 /**XmlIO houses static xml file IO functions, originally written to
  * interface with the bounding box files
@@ -65,7 +63,11 @@ public class XmlIO
                 NodeList nameNodeList = e.getElementsByTagName("name");
                 Set<String> assocChainIDs = new HashSet<>();
                 for(int j=0; j<nameNodeList.getLength(); j++){
-                    assocChainIDs.add(nameNodeList.item(j).getTextContent().split("_")[1]);
+                    String nameText = nameNodeList.item(j).getTextContent();
+                    if(nameText.contains("_"))
+                        assocChainIDs.add(nameText.split("_")[1]);
+                    else
+                        assocChainIDs.add(nameText);
                 }
 
                 int boxID = -1;
@@ -79,7 +81,7 @@ public class XmlIO
                     int yMin = Integer.parseInt(subElement.getElementsByTagName("ymin").item(0).getTextContent());
                     int xMax = Integer.parseInt(subElement.getElementsByTagName("xmax").item(0).getTextContent());
                     int yMax = Integer.parseInt(subElement.getElementsByTagName("ymax").item(0).getTextContent());
-                    d.addBoundingBox(new BoundingBox(boxID, xMin, yMin, xMax, yMax), assocChainIDs);
+                    d.addBoundingBox(new BoundingBox(d.getID(), boxID, xMin, yMin, xMax, yMax), assocChainIDs);
                 }
                 if(node_scene != null)
                     if(Integer.parseInt(node_scene.getTextContent()) == 1)
@@ -96,24 +98,152 @@ public class XmlIO
         }
     }
 
-    /**Writes the bounding box XML file for the given Document
+    /**Returns the bounding box XML file content for the given Document
      * in PASCAL-VOC format
      *
      * @param d
      */
-    public static void writeBoundingBoxFile(structures.Document d)
+    public static String writeBoundingBoxFile(structures.Document d) {
+        Map<Integer, Set<String>> boxChainSetDict =
+                new HashMap<>();
+        for(BoundingBox b : d.getBoundingBoxSet()){
+            boxChainSetDict.put(b.getIdx(), new HashSet<>());
+            for(Mention m : d.getMentionSetForBox(b))
+                boxChainSetDict.get(b.getIdx()).add(m.getChainID());
+        }
+
+        return writeBoundingBoxFile(d.getID(), d.height, d.width,
+                d.getBoundingBoxSet(), boxChainSetDict, d.getChainSet());
+    }
+
+    /**Returns the bounding box XML file content for the given set of boxes
+     * in PASCAL-VOC format; originally written for use with a subset of
+     * Document's boxes
+     *
+     * @param docID
+     * @param height
+     * @param width
+     * @param boxSet
+     * @param boxChainSetDict
+     * @param chainSet
+     * @return
+     */
+    public static String writeBoundingBoxFile(String docID,
+                                              int height, int width,
+                                              Collection<BoundingBox> boxSet,
+                                              Map<Integer, Set<String>> boxChainSetDict,
+                                              Collection<Chain> chainSet)
     {
         //first, create mappings we'll need as we create the file
-        Map<Integer, Set<String>> boxChainSetDict = new HashMap<>();
-        for(BoundingBox b : d.getBoundingBoxSet()){
-            boxChainSetDict.put(b.getID(), new HashSet<>());
-            for(Mention m : d.getMentionSetForBox(b))
-                boxChainSetDict.get(b.getID()).add(m.getChainID());
-        }
         Map<String, Boolean> chainSceneDict = new HashMap<>();
-        for(Chain c : d.getChainSet())
+        Map<String, Boolean> chainNoboxDict = new HashMap<>();
+        for(Chain c : chainSet) {
             chainSceneDict.put(c.getID(), c.isScene);
+            chainNoboxDict.put(c.getID(), c.isOrigNobox);
+        }
 
+        try{
+            DocumentBuilderFactory docFactory = DocumentBuilderFactory.newInstance();
+            DocumentBuilder docBuilder = docFactory.newDocumentBuilder();
+
+            // root <annotation> element
+            Document doc = docBuilder.newDocument();
+            Element rootElement = doc.createElement("annotation");
+            doc.appendChild(rootElement);
+
+            //Add a standalone filename element
+            Element filenameElement = doc.createElement("filename");
+            filenameElement.appendChild(doc.createTextNode(docID));
+            rootElement.appendChild(filenameElement);
+
+            //add the top level size element and its members
+            Element size = doc.createElement("size");
+            rootElement.appendChild(size);
+            Element widthElem = doc.createElement("width");
+            widthElem.appendChild(doc.createTextNode(String.valueOf(width)));
+            size.appendChild(widthElem);
+            Element heightElem = doc.createElement("height");
+            heightElem.appendChild(doc.createTextNode(String.valueOf(height)));
+            size.appendChild(heightElem);
+            Element depth = doc.createElement("depth");
+            depth.appendChild(doc.createTextNode("3"));
+            size.appendChild(depth);
+
+            //Put each bounding box into a separate object tag
+            for(BoundingBox b : boxSet) {
+                Element object = doc.createElement("object");
+                rootElement.appendChild(object);
+                for(String chainID : boxChainSetDict.get(b.getIdx())){
+                    Element name = doc.createElement("name");
+                    name.appendChild(doc.createTextNode(docID + "_" + chainID));
+                    object.appendChild(name);
+
+                    //remove this accounted-for chain from the set
+                    chainSceneDict.remove(chainID);
+                }
+                Element bndbx = doc.createElement("bndbox");
+                object.appendChild(bndbx);
+                Element xmin = doc.createElement("xmin");
+                xmin.appendChild(doc.createTextNode(String.valueOf(b.getXMin())));
+                bndbx.appendChild(xmin);
+                Element xmax = doc.createElement("xmax");
+                xmax.appendChild(doc.createTextNode(String.valueOf(b.getXMax())));
+                bndbx.appendChild(xmax);
+                Element ymin = doc.createElement("ymin");
+                ymin.appendChild(doc.createTextNode(String.valueOf(b.getYMin())));
+                bndbx.appendChild(ymin);
+                Element ymax = doc.createElement("ymax");
+                ymax.appendChild(doc.createTextNode(String.valueOf(b.getYMax())));
+                bndbx.appendChild(ymax);
+            }
+
+            //for each chain we haven't yet covered, add an object tag
+            for(String chainID : chainSceneDict.keySet()){
+                Element object = doc.createElement("object");
+                rootElement.appendChild(object);
+
+                Element name = doc.createElement("name");
+                name.appendChild(doc.createTextNode(docID + "_" + chainID));
+                object.appendChild(name);
+
+                int isScene = 0;
+                if(chainSceneDict.containsKey(chainID))
+                    isScene = Util.castInteger(chainSceneDict.get(chainID));
+                int isNobox = 0;
+                if(chainNoboxDict.containsKey(chainID))
+                    isNobox = Util.castInteger(chainNoboxDict.get(chainID));
+
+                Element scene = doc.createElement("scene");
+                scene.appendChild(doc.createTextNode(""+isScene));
+                object.appendChild(scene);
+                Element bndbx = doc.createElement("nobndbox");
+                bndbx.appendChild(doc.createTextNode(""+isNobox));
+                object.appendChild(bndbx);
+            }
+
+            //write the file
+            TransformerFactory transformerFactory = TransformerFactory.newInstance();
+            Transformer transformer = transformerFactory.newTransformer();
+            transformer.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes");
+            transformer.setOutputProperty(OutputKeys.INDENT, "yes");
+            transformer.setOutputProperty("{http://xml.apache.org/xslt}indent-amount", "4");
+            DOMSource source = new DOMSource(doc);
+            StringWriter sw = new StringWriter();
+            transformer.transform(source, new StreamResult(sw));
+            return sw.toString();
+        } catch(Exception ex){
+            Logger.log("Could not save bounding boxes for doc:%s",
+                    docID);
+            Logger.log(ex);
+        }
+        return null;
+    }
+
+/*
+    public static void writeBoundingBoxFile(structures.Document d,
+                                 Set<String> usedChainSet,
+                                 Map<Integer, Set<String>> boxChainSetDict)
+    {
         try{
             DocumentBuilderFactory docFactory = DocumentBuilderFactory.newInstance();
             DocumentBuilder docBuilder = docFactory.newDocumentBuilder();
@@ -152,7 +282,7 @@ public class XmlIO
                     object.appendChild(name);
 
                     //remove this accounted-for chain from the set
-                    chainSceneDict.remove(chainID);
+                    usedChainSet.remove(chainID);
                 }
                 Element bndbx = doc.createElement("bndbox");
                 object.appendChild(bndbx);
@@ -171,7 +301,7 @@ public class XmlIO
             }
 
             //for each chain we haven't yet covered, add an object tag
-            for(String chainID : chainSceneDict.keySet()){
+            for(Chain c : d.getChainSet()){
                 Element object = doc.createElement("object");
                 rootElement.appendChild(object);
 
@@ -180,14 +310,18 @@ public class XmlIO
                 object.appendChild(name);
 
                 int isScene = 0;
-                if(chainSceneDict.containsKey(chainID))
-                    isScene = Util.castInteger(chainSceneDict.get(chainID));
+                if(chainSceneDict != null)
+                    if(chainSceneDict.containsKey(chainID))
+                        isScene = Util.castInteger(chainSceneDict.get(chainID));
 
                 Element scene = doc.createElement("scene");
                 scene.appendChild(doc.createTextNode(""+isScene));
                 object.appendChild(scene);
                 Element bndbx = doc.createElement("nobndbox");
-                bndbx.appendChild(doc.createTextNode("1"));
+                if(noboxDict.containsKey(chainID) && noboxDict.get(chainID))
+                    bndbx.appendChild(doc.createTextNode("1"));
+                else
+                    bndbx.appendChild(doc.createTextNode("0"));
                 object.appendChild(bndbx);
             }
 
@@ -205,5 +339,5 @@ public class XmlIO
                     d.getID());
             Logger.log(ex);
         }
-    }
+    }*/
 }

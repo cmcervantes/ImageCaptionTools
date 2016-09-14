@@ -42,10 +42,14 @@ public class Document
         //Load the sentence files into Captions
         List<String> capStrList =
                 FileIO.readFile_lineList(sentenceFilename);
+        int lastCapIdx = -1;
         try{
-            for(int i=0; i<capStrList.size(); i++)
+            for(int i=0; i<capStrList.size(); i++){
+                lastCapIdx = i;
                 _captionList.add(Caption.fromEntitiesStr(_ID, i, capStrList.get(i)));
+            }
         }catch (Exception ex){
+            Logger.log("Encountered exception: " + _ID + "#" + lastCapIdx);
             Logger.log(ex);
         }
 
@@ -363,13 +367,18 @@ public class Document
 
         //grab the boxes from d and add them to our chains
         for(Chain c : d.getChainSet()){
-            for(BoundingBox b : c.getBoundingBoxSet())
-                _chainDict.get(c.getID()).addBoundingBox(b);
+            //It's possible - in the old data - for chains in
+            //coref files to not appear in the entities strings;
+            //drop them
+            if(_chainDict.containsKey(c.getID())){
+                for(BoundingBox b : c.getBoundingBoxSet())
+                    _chainDict.get(c.getID()).addBoundingBox(b);
 
-            //Since the box annotations also contain the scene flag,
-            //add that here as well
-            _chainDict.get(c.getID()).isScene = c.isScene;
-            _chainDict.get(c.getID()).isOrigNobox = c.isOrigNobox;
+                //Since the box annotations also contain the scene flag,
+                //add that here as well
+                _chainDict.get(c.getID()).isScene = c.isScene;
+                _chainDict.get(c.getID()).isOrigNobox = c.isOrigNobox;
+            }
         }
     }
 

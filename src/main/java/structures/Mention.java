@@ -317,14 +317,18 @@ public class Mention extends Annotation
     }
 
     /**Returns this mention's pronoun type, based on the
-     * lemma of the head word (NONE, if this mention
-     * is not a pronoun)
+     * text; if none is found, attempts to determine
+     * pronoun type based on head lemma alone
+     * (NONE, if this mention is not a pronoun)
      *
      * @return
      */
     public PRONOUN_TYPE getPronounType()
     {
-        return PRONOUN_TYPE.parseType(getHead().getLemma());
+        PRONOUN_TYPE pronomType = PRONOUN_TYPE.parseType(toString().toLowerCase());
+        if(pronomType == PRONOUN_TYPE.NONE)
+            pronomType = PRONOUN_TYPE.parseType(getHead().getLemma());
+        return pronomType;
     }
 
     /**Returns the gender of this mention, if available; originally
@@ -361,11 +365,13 @@ public class Mention extends Annotation
         //search for the right hypernym, as well as handling our special cases
         if(normLemma.equals("she") || normLemma.equals("her") ||
                 normLemma.equals("girl") || normLemma.equals("woman") ||
-                normLemma.equals("herself") || normText.contains(" female "))
+                normLemma.equals("herself") || normText.contains(" female ") ||
+                normLemma.equals("lady"))
             return "female";
         else if(normLemma.equals("he") || normLemma.equals("him") ||
                 normLemma.equals("boy") || normLemma.equals("man") ||
-                normLemma.equals("himself") || normText.contains(" male "))
+                normLemma.equals("himself") || normText.contains(" male ") ||
+                normLemma.equals("guy"))
             return "male";
         return "neuter";
     }
@@ -444,21 +450,21 @@ public class Mention extends Annotation
      */
     public static void initLexiconDict(String lexiconRoot)
     {
-        String[] types =
-                {"animals", "bodyparts", "clothing",
-                        "colors", "instruments", "people",
-                        "scene", "vehicles"};
-        _lexiconDict = new HashMap<>();
+        String[] types = {"animals", "bodyparts", "clothing",
+                "colors", "instruments", "people",
+                "scene", "vehicles"};
+        Map<String, Set<String>> lemmaTypeSetDict = new HashMap<>();
         for(String type : types){
-            List<String> lines =
-                    FileIO.readFile_lineList(lexiconRoot + type + ".txt");
-            for(String line : lines){
-                if(_lexiconDict.containsKey(line))
-                    _lexiconDict.put(line, _lexiconDict.get(line) + "/" + type);
-                else
-                    _lexiconDict.put(line, type);
+            List<String> lineList = FileIO.readFile_lineList(lexiconRoot + type + ".txt");
+            for(String lemma : lineList){
+                if(!lemmaTypeSetDict.containsKey(lemma))
+                    lemmaTypeSetDict.put(lemma, new HashSet<>());
+                lemmaTypeSetDict.get(lemma).add(type);
             }
         }
+        _lexiconDict = new HashMap<>();
+        for(String lemma : lemmaTypeSetDict.keySet())
+            _lexiconDict.put(lemma, StringUtil.listToString(lemmaTypeSetDict.get(lemma), "/"));
     }
 
     /**PRONOUN_TYPE enumerates various pronoun types as well as provides
@@ -492,6 +498,7 @@ public class Mention extends Annotation
             //subjective plural - they
             typeWordSetDict.get(SUBJECTIVE_PLURAL).add("they");
             wordSet_plural.add("they");
+
 
             //objective singular - him / her / it
             typeWordSetDict.get(OBJECTIVE_SINGULAR).add("him");
@@ -532,6 +539,7 @@ public class Mention extends Annotation
             typeWordSetDict.get(RELATIVE).add("whom");
             typeWordSetDict.get(RELATIVE).add("where");
             typeWordSetDict.get(RELATIVE).add("when");
+            typeWordSetDict.get(RELATIVE).add("what");
             wordSet_sing.add("that");
             wordSet_sing.add("which");
             wordSet_sing.add("who");
@@ -539,6 +547,7 @@ public class Mention extends Annotation
             wordSet_sing.add("whom");
             wordSet_sing.add("where");
             wordSet_sing.add("when");
+            wordSet_sing.add("what");
 
             //demonstrative - this / that / these / those
             typeWordSetDict.get(DEMONSTRATIVE).add("this");
@@ -571,6 +580,17 @@ public class Mention extends Annotation
             wordSet_sing.add("somebody");
             wordSet_sing.add("someone");
             wordSet_sing.add("one");
+
+            //special pronouns are special
+            typeWordSetDict.get(SPECIAL).add("another");
+            typeWordSetDict.get(SPECIAL).add("other");
+            typeWordSetDict.get(SPECIAL).add("others");
+            typeWordSetDict.get(SPECIAL).add("both");
+            wordSet_sing.add("another");
+            wordSet_sing.add("other");
+            wordSet_plural.add("others");
+            wordSet_plural.add("both");
+
         }
 
         /**Returns whether given string s is a plural pronoun, false if

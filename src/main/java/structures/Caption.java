@@ -116,7 +116,8 @@ public class Caption extends Annotation
         int startChunkIdx = mentionTokenList.get(0).chunkIdx;
         int endChunkIdx = mentionTokenList.get(mentionTokenList.size()-1).chunkIdx;
         for(int i=startChunkIdx; i<=endChunkIdx; i++)
-            mentionChunkList.add(_chunkList.get(i));
+            if(i > -1 && i < _chunkList.size())
+                mentionChunkList.add(_chunkList.get(i));
 
         Mention m = new Mention(_docID, _idx, idx, chainID,
                     mentionTokenList, mentionChunkList,

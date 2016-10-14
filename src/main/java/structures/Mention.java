@@ -475,7 +475,7 @@ public class Mention extends Annotation
     {
         SUBJECTIVE_SINGULAR, SUBJECTIVE_PLURAL, OBJECTIVE_SINGULAR,
         OBJECTIVE_PLURAL, REFLEXIVE_SINGULAR, REFLEXIVE_PLURAL,
-        RECIPROCAL, RELATIVE, DEMONSTRATIVE, INDEFINITE, SPECIAL, NONE;
+        RECIPROCAL, RELATIVE, DEMONSTRATIVE, INDEFINITE, OTHER, NONE;
 
         private static Map<PRONOUN_TYPE, Set<String>> typeWordSetDict;
         private static Set<String> wordSet_sing;
@@ -498,7 +498,6 @@ public class Mention extends Annotation
             //subjective plural - they
             typeWordSetDict.get(SUBJECTIVE_PLURAL).add("they");
             wordSet_plural.add("they");
-
 
             //objective singular - him / her / it
             typeWordSetDict.get(OBJECTIVE_SINGULAR).add("him");
@@ -570,7 +569,6 @@ public class Mention extends Annotation
             typeWordSetDict.get(INDEFINITE).add("someone");
             typeWordSetDict.get(INDEFINITE).add("nothing");
             typeWordSetDict.get(INDEFINITE).add("nobody");
-            typeWordSetDict.get(INDEFINITE).add("one");
             typeWordSetDict.get(INDEFINITE).add("none");
             typeWordSetDict.get(INDEFINITE).add("no one");
             wordSet_plural.add("anything");
@@ -579,18 +577,18 @@ public class Mention extends Annotation
             wordSet_sing.add("something");
             wordSet_sing.add("somebody");
             wordSet_sing.add("someone");
-            wordSet_sing.add("one");
 
             //special pronouns are special
-            typeWordSetDict.get(SPECIAL).add("another");
-            typeWordSetDict.get(SPECIAL).add("other");
-            typeWordSetDict.get(SPECIAL).add("others");
-            typeWordSetDict.get(SPECIAL).add("both");
+            typeWordSetDict.get(OTHER).add("another");
+            typeWordSetDict.get(OTHER).add("other");
+            typeWordSetDict.get(OTHER).add("others");
+            typeWordSetDict.get(OTHER).add("both");
+            typeWordSetDict.get(OTHER).add("one");
             wordSet_sing.add("another");
             wordSet_sing.add("other");
             wordSet_plural.add("others");
             wordSet_plural.add("both");
-
+            wordSet_sing.add("one");
         }
 
         /**Returns whether given string s is a plural pronoun, false if
@@ -621,7 +619,7 @@ public class Mention extends Annotation
 
             //since it and that don't have unique types, set them as special
             if(normText.equals("it") || normText.equals("that"))
-                return SPECIAL;
+                return OTHER;
 
             for(PRONOUN_TYPE t : PRONOUN_TYPE.values())
                 if(typeWordSetDict.get(t).contains(normText))
@@ -642,7 +640,7 @@ public class Mention extends Annotation
                     this == REFLEXIVE_SINGULAR ||
                     this == REFLEXIVE_PLURAL ||
                     this == RELATIVE ||
-                    this == SPECIAL;
+                    this == OTHER;
         }
     }
 }

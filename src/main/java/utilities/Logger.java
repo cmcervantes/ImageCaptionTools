@@ -16,6 +16,7 @@ public class Logger
     private static boolean verbose = false;
     private static long lastLogTS;
     private static int _statusDelay;
+    private static long _tic;
 
     /**Sets the internal verbose flag to true.
      * When verbose is turned off, logging messages
@@ -131,5 +132,36 @@ public class Logger
                     (System.currentTimeMillis() - startTS)/1000.0,
                     message);
         }
+    }
+
+
+    /**Logs "tic"; sets the internal tic value to now;
+     * meant to be used with toc()
+     */
+    public static void tic()
+    {
+        tic(null);
+    }
+
+    /**Logs the given message with "tic"; sets the internal tic
+     * value to now
+     *
+     * @param message
+     */
+    public static void tic(String message)
+    {
+        _tic = System.currentTimeMillis();
+        if(message != null)
+            log(message + " (tic)");
+        else
+            log("tic");
+    }
+
+    /**Logs "toc" with the time (in seconds) since
+     * tic was called
+     */
+    public static void toc()
+    {
+        log("toc (%.3f)", (System.currentTimeMillis() - _tic) / 1000.0);
     }
 }

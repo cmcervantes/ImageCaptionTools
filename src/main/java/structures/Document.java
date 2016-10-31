@@ -264,6 +264,27 @@ public class Document
         return null;
     }
 
+    /**Returns whether -- according to the bounding box data --
+     * m1 is a subset of m2
+     *
+     * @param m1
+     * @param m2
+     * @return
+     */
+    public boolean getBoxesAreSubset(Mention m1, Mention m2)
+    {
+        Set<BoundingBox> boxes1 = getBoxSetForMention(m1);
+        Set<BoundingBox> boxes2 = getBoxSetForMention(m2);
+        Set<BoundingBox> intersect = new HashSet<>(boxes1);
+        intersect.retainAll(boxes2);
+        if(boxes1.size() == intersect.size() &&
+           boxes2.size() > intersect.size() &&
+           !intersect.isEmpty()){
+            return true;
+        }
+        return false;
+    }
+
     /**Returns the set of mentions associated with
      * the given bounding box; null if no mentions are associated
      *
@@ -277,6 +298,8 @@ public class Document
                 return c.getMentionSet();
         return null;
     }
+
+
 
     /**Adds the given bounding box to all the specified chain IDs
      *

@@ -266,21 +266,42 @@ public class Mention extends Annotation
      */
     private void initLexicalType()
     {
-        //In order to distinguish between "buffalo" and "water buffalo"
-        //(though, admittedly, they're the same type), we want to
-        //get the lexical type for the longest string that
-        //  - is in the lexicon
-        //  - terminates the mention
         String type = "other";
-        int matchLength = -1;
-        List<String> lemmas = new ArrayList<>();
-        _tokenList.forEach(t -> lemmas.add(t.getLemma()));
-        String lemmaStr = StringUtil.listToString(lemmas, " ");
 
-        for (String s : _lexiconDict.keySet()) {
-            if (s.length() >= matchLength && lemmaStr.endsWith(s)) {
-                type = _lexiconDict.get(s);
-                matchLength = s.length();
+        //Handle non-pronominal mentions and pronouns
+        //differently
+        if(this.getPronounType() == PRONOUN_TYPE.NONE){
+            //In order to distinguish between "buffalo" and "water buffalo"
+            //(though, admittedly, they're the same type), we want to
+            //get the lexical type for the longest string that
+            //  - is in the lexicon
+            //  - terminates the mention
+            int matchLength = -1;
+            List<String> lemmas = new ArrayList<>();
+            _tokenList.forEach(t -> lemmas.add(t.getLemma()));
+            String lemmaStr = StringUtil.listToString(lemmas, " ");
+
+            for (String s : _lexiconDict.keySet()) {
+                if (s.length() >= matchLength && lemmaStr.endsWith(s)) {
+                    type = _lexiconDict.get(s);
+                    matchLength = s.length();
+                }
+            }
+        } else {
+            switch(this.getPronounType()){
+                case SUBJECTIVE_SINGULAR:
+                case SUBJECTIVE_PLURAL:
+                case OBJECTIVE_SINGULAR:
+                case OBJECTIVE_PLURAL:
+                case REFLEXIVE_SINGULAR:
+                case REFLEXIVE_PLURAL:
+                case RECIPROCAL:
+                    type = "people/animals";
+            }
+            String normText = this.toString().toLowerCase();
+            if(normText.equals("who") || normText.equals("whom") ||
+               normText.equals("somebody") || normText.equals("someone")){
+                type = "people";
             }
         }
         _lexType = type;
@@ -526,9 +547,11 @@ public class Mention extends Annotation
 
             //reciprocal - each other / one another
             typeWordSetDict.get(RECIPROCAL).add("each other");
+            typeWordSetDict.get(RECIPROCAL).add("each");
             typeWordSetDict.get(RECIPROCAL).add("one another");
             wordSet_plural.add("each other");
             wordSet_plural.add("one another");
+            wordSet_plural.add("each");
 
             //relative - that / which / who / whose / whom / where / when
             typeWordSetDict.get(RELATIVE).add("that");
@@ -584,11 +607,21 @@ public class Mention extends Annotation
             typeWordSetDict.get(OTHER).add("others");
             typeWordSetDict.get(OTHER).add("both");
             typeWordSetDict.get(OTHER).add("one");
+            typeWordSetDict.get(OTHER).add("two");
+            typeWordSetDict.get(OTHER).add("three");
+            typeWordSetDict.get(OTHER).add("four");
+            typeWordSetDict.get(OTHER).add("all");
+            typeWordSetDict.get(OTHER).add("some");
             wordSet_sing.add("another");
             wordSet_sing.add("other");
             wordSet_plural.add("others");
             wordSet_plural.add("both");
+            wordSet_plural.add("all");
+            wordSet_plural.add("some");
             wordSet_sing.add("one");
+            wordSet_plural.add("two");
+            wordSet_plural.add("three");
+            wordSet_plural.add("four");
         }
 
         /**Returns whether given string s is a plural pronoun, false if

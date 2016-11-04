@@ -76,7 +76,21 @@ public class FileIO
                                      String fileRoot, String fileExt,
                                      boolean includeDate)
     {
-        writeFile(StringUtil.listToString(lineList, "\n"), fileRoot, fileExt, includeDate);
+        String filename = fileRoot;
+        if(includeDate)
+            filename += "_" + Util.getCurrentDateTime("yyyyMMdd");
+        filename += "." + fileExt;
+        try {
+            BufferedWriter bw = new BufferedWriter(
+                    new FileWriter(filename));
+            for(T line : lineList){
+                String s = line.toString() + '\n';
+                bw.write(s);
+            }
+            bw.close();
+        } catch(IOException ioEx) {
+            System.err.println("Could not save output file " + filename);
+        }
     }
 
     /**Writes <b>lineList</b> to <b>fileRoot</b>[_date].<b>fileExt</b>,
@@ -171,23 +185,34 @@ public class FileIO
                                      String fileRoot, String fileExt,
                                      boolean includeDate)
     {
-        StringBuilder sb = new StringBuilder();
-        for(List<T> row : table){
-            for(int i=0; i<row.size(); i++){
-                T cell = row.get(i);
-                String cellStr = "";
-                if(cell != null){
-                    cellStr = String.valueOf(cell);
-                    if(cell instanceof String)
-                        cellStr = "\"" + cellStr.replace("\"", "'") + "\"";
+        String filename = fileRoot;
+        if(includeDate)
+            filename += "_" + Util.getCurrentDateTime("yyyyMMdd");
+        filename += "." + fileExt;
+        try {
+            BufferedWriter bw = new BufferedWriter(
+                    new FileWriter(filename));
+            for(List<T> row : table){
+                StringBuilder sb = new StringBuilder();
+                for(int i=0; i<row.size(); i++){
+                    T cell = row.get(i);
+                    String cellStr = "";
+                    if(cell != null){
+                        cellStr = String.valueOf(cell);
+                        if(cell instanceof String)
+                            cellStr = "\"" + cellStr.replace("\"", "'") + "\"";
+                    }
+                    sb.append(cellStr);
+                    if(i < row.size() - 1)
+                        sb.append(",");
                 }
-                sb.append(cellStr);
-                if(i < row.size() - 1)
-                    sb.append(",");
+                sb.append("\n");
+                bw.write(sb.toString());
             }
-            sb.append("\n");
+            bw.close();
+        } catch(IOException ioEx) {
+            System.err.println("Could not save output file " + filename);
         }
-        writeFile(sb.toString(), fileRoot, fileExt, includeDate);
     }
 
     /**Writes <b>table</b> to <b>fileRoot</b>[_date].<b>fileExt</b>,

@@ -637,7 +637,7 @@ public class Caption extends Annotation
     public String toPosString()
     {
         List<String> tokenStrList = new ArrayList<>();
-        _tokenList.forEach(t -> tokenStrList.add(t.toPosString()));
+        _tokenList.stream().forEachOrdered(t -> tokenStrList.add(t.toPosString()));
         return StringUtil.listToString(tokenStrList, " ");
     }
 
@@ -829,7 +829,7 @@ public class Caption extends Annotation
                     List<Chunk> chunkSubList =
                             _chunkList.subList(startIdx_chunk, _chunkList.size());
                     List<Token> tokenSubList = new ArrayList<>();
-                    chunkSubList.forEach(c -> tokenSubList.addAll(c.getTokenList()));
+                    chunkSubList.stream().forEachOrdered(c -> tokenSubList.addAll(c.getTokenList()));
                     Mention m = new Mention(_docID, _idx, prevEntityIdx,
                             tokenSubList.get(0).chainID, tokenSubList, chunkSubList
                     );

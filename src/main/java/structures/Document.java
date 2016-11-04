@@ -136,7 +136,7 @@ public class Document
     public List<Mention> getMentionList()
     {
         List<Mention> mentionList = new ArrayList<>();
-        _captionList.forEach(c -> mentionList.addAll(c.getMentionList()));
+        _captionList.stream().forEachOrdered(c -> mentionList.addAll(c.getMentionList()));
         return mentionList;
     }
 

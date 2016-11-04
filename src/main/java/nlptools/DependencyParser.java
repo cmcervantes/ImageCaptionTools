@@ -37,7 +37,7 @@ public class DependencyParser
     {
         //convert our tokens to TaggedWords, for the parser
         List<TaggedWord> wordList = new ArrayList<>();
-        c.getTokenList().forEach(t -> wordList.add(new TaggedWord(t.getText(), t.getPosTag())));
+        c.getTokenList().stream().forEachOrdered(t -> wordList.add(new TaggedWord(t.getText(), t.getPosTag())));
 
         //get a grammatical structure corresponding to the dependency prediction
         //and reduce it to a set of dependency strings (govIdx|rel|depIdx)

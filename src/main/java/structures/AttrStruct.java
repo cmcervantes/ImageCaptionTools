@@ -42,7 +42,7 @@ public class AttrStruct
         _nestedAttrs = new HashMap<>();
         for(String name : attrStruct._nestedAttrs.keySet()){
             Set<AttrStruct> structSet = new HashSet<>();
-            attrStruct._nestedAttrs.get(name).forEach(as -> structSet.add(new AttrStruct(as)));
+            attrStruct._nestedAttrs.get(name).stream().forEachOrdered(as -> structSet.add(new AttrStruct(as)));
             _nestedAttrs.put(name, structSet);
         }
     }

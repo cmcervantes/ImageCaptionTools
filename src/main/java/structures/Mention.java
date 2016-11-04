@@ -278,7 +278,7 @@ public class Mention extends Annotation
             //  - terminates the mention
             int matchLength = -1;
             List<String> lemmas = new ArrayList<>();
-            _tokenList.forEach(t -> lemmas.add(t.getLemma()));
+            _tokenList.stream().forEachOrdered(t -> lemmas.add(t.getLemma()));
             String lemmaStr = StringUtil.listToString(lemmas, " ");
 
             for (String s : _lexiconDict.keySet()) {

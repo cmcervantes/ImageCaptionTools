@@ -56,7 +56,7 @@ public class Tagger
         String[] tags = new String[tokenList.size()];
         for(int i=0; i<tokenList.size(); i++){
             structures.Token t = tokenList.get(i);
-            Token illToken = new Token(new Word(t.getText()), null, null);
+            Token illToken = new Token(new Word(t.toString()), null, null);
             tags[i] = predict(illToken);
         }
         return tags;

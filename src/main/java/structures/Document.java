@@ -6,6 +6,7 @@ import utilities.StringUtil;
 import utilities.XmlIO;
 
 import java.awt.*;
+import java.awt.geom.Area;
 import java.util.*;
 import java.util.List;
 
@@ -17,6 +18,11 @@ import java.util.List;
  */
 public class Document
 {
+    private static Set<String> _collectives = new HashSet<>(FileIO.readFile_lineList(
+            "/shared/projects/Flickr30kEntities_v2/resources/collectiveNouns.txt"));
+    private static final String PTRN_APPOS = "^NP , (NP (VP |ADJP |PP |and )*)+,.*$";
+    private static final String PTRN_LIST = "^NP , (NP ,?)* and NP.*$";
+
     private String _ID;
     private Map<String, Chain> _chainDict;
     private List<Caption> _captionList;
@@ -25,6 +31,7 @@ public class Document
     public int width;
     public int crossVal;
     public boolean reviewed;
+    public String comments;
 
     /**Document constructor used for loading Documents from
      * a pair of sentence / annotation files
@@ -299,8 +306,6 @@ public class Document
         return null;
     }
 
-
-
     /**Adds the given bounding box to all the specified chain IDs
      *
      * @param b
@@ -419,6 +424,162 @@ public class Document
         return Document.toConll2012(this, chainSet);
     }
 
+    /**Returns the set of subset pairs (as unique ID strings),
+     * for this Document; superset pairs can be inferred by
+     * reversing each of the pairs
+     *
+     * @return
+     */
+    public Set<String> getSubsetMentions()
+    {
+        Set<String> subsets = new HashSet<>();
+        List<Mention> mentionList = getMentionList();
+
+        Set<Mention[]> subsets_box = new HashSet<>();
+        Set<Mention[]> subsets_heur = new HashSet<>();
+
+        //Get all mention pairs with boxes in the subset relation
+        for(int i=0; i<mentionList.size(); i++){
+            Mention m_i = mentionList.get(i);
+            if(m_i.getChainID().equals("0"))
+                continue;
+
+            for(int j=i+1; j<mentionList.size(); j++){
+                Mention m_j = mentionList.get(j);
+
+                if(m_j.getChainID().equals("0"))
+                    continue;
+
+                if(getBoxesAreSubset(m_i, m_j))
+                    subsets_box.add(new Mention[]{m_i, m_j});
+                else if(getBoxesAreSubset(m_j, m_i))
+                    subsets_box.add(new Mention[]{m_j, m_i});
+            }
+        }
+
+        //Get all mention pairs in our syntactic structures
+        for(Caption c : _captionList){
+            Mention xInRelevantXofY = null;
+            if(!c.getMentionList().isEmpty()){
+                Mention m0 = c.getMentionList().get(0);
+                for(int i=2; i<c.getMentionList().size(); i++){
+                    Mention m = c.getMentionList().get(i-1);
+                    Mention mPrime = c.getMentionList().get(i);
+                    if(m0.getChainID().equals(mPrime.getChainID())){
+                        List<Token> inters = c.getInterstitialTokens(m, mPrime);
+                        if(inters.size() == 1 && inters.get(0).toString().equals("of"))
+                            xInRelevantXofY = m;
+                    }
+                }
+            }
+
+            //grab the first mention
+            Mention m0 = null;
+            if(!c.getMentionList().isEmpty())
+                m0 = c.getMentionList().get(0);
+
+            if(c.toChunkTypeString(true).matches(PTRN_APPOS) && !c.toChunkTypeString(true).matches(PTRN_LIST)){
+                Chunk firstNP = m0.getChunkList().get(m0.getChunkList().size() - 1);
+
+                //Get everything between the first mention
+                //and the first verb chunk
+                Chunk firstVP = null;
+                for(Chunk ch : c.getChunkList()){
+                    if(ch.getChunkType().equals("VP")){
+                        firstVP = ch;
+                        break;
+                    }
+                }
+
+                //Get interstitial chunks
+                if(firstVP != null){
+                    List<Token> interstitial = c.getInterstitialTokens(firstNP, firstVP);
+                    //If this span is enclosed by commas, strip them
+                    if(interstitial.get(0).toString().equals(","))
+                        interstitial.remove(0);
+                    int intrst_len = interstitial.size();
+                    if(interstitial.get(intrst_len - 1).toString().equals(","))
+                        interstitial.remove(intrst_len-1);
+
+                    //split the token list into sublists on commas or 'and'
+                    List<List<Token>> phraseList = new ArrayList<>();
+                    List<Token> currentPhrase = new ArrayList<>();
+                    for(Token t : interstitial){
+                        if(t.toString().equals("and") || t.toString().equals(",")){
+                            if(!currentPhrase.isEmpty())
+                                phraseList.add(currentPhrase);
+                            currentPhrase = new ArrayList<>();
+                        } else {
+                            currentPhrase.add(t);
+                        }
+                    }
+                    if(!currentPhrase.isEmpty())
+                        phraseList.add(currentPhrase);
+
+                    //for each of these phrases, get the mention corresponding to the
+                    //first token
+                    Set<Mention> subsetMentions = new HashSet<>();
+                    for(List<Token> phrase : phraseList){
+                        int mIdx = phrase.get(0).mentionIdx;
+                        if(mIdx > -1){
+                            Mention m = c.getMentionList().get(mIdx);
+
+                            //Mentions can only be in a subset relation if they
+                            //  a) have matching lexical types
+                            //  b) the latter mention is a pronoun
+                            //  c) the latter mention is a numeral
+                            //  d) the latter is some variant of 'other'
+                            boolean mIsNum = false;
+                            try{
+                                Integer.parseInt(m.toString());
+                                mIsNum = true;
+                            } catch(Exception ex){/*Do nothing*/}
+                            if(Mention.getLexicalTypeMatch(m0, m) > 0 ||
+                                    m0.getPronounType() != Mention.PRONOUN_TYPE.NONE ||
+                                    m.getPronounType() != Mention.PRONOUN_TYPE.NONE ||
+                                    mIsNum || m.getHead().getLemma().equals("other")){
+                                subsetMentions.add(c.getMentionList().get(mIdx));
+                            }
+                        }
+                    }
+                    if(!subsetMentions.isEmpty()){
+                        for(Mention m : subsetMentions)
+                            subsets_heur.add(new Mention[]{m, m0});
+                    }
+                }
+            } else if(xInRelevantXofY != null){
+                //assign subset to mention 0
+                subsets_heur.add(new Mention[]{xInRelevantXofY, m0});
+            }
+        }
+
+        //if we've identified m \subset m' according to the heuristics, then
+        //m \subset m'', where m' is coref with m''; similarly
+        //mm \subset m' where mm is coref with m
+        List<Mention[]> subsets_heur_list = new ArrayList<>(subsets_heur);
+        for(Mention[] pair : subsets_heur_list){
+            Mention sub = pair[0], sup = pair[1];
+            List<Mention> subMentions = new ArrayList<>();
+            List<Mention> supMentions = new ArrayList<>();
+            for(Mention m : mentionList){
+                if(sub.getChainID().equals(m.getChainID()))
+                    subMentions.add(m);
+                else if(sup.getChainID().equals(m.getChainID()))
+                    supMentions.add(m);
+            }
+            for(Mention subM : subMentions)
+                for(Mention supM : supMentions)
+                    subsets_heur.add(new Mention[]{subM, supM});
+        }
+
+        //Finally, reduce both subset sets to unique IDs, to throw away dups
+        for(Mention[] pair : subsets_box)
+            subsets.add(Document.getMentionPairStr(pair[0], pair[1], true, true));
+        for(Mention[] pair : subsets_heur)
+            subsets.add(Document.getMentionPairStr(pair[0], pair[1], true, true));
+        return subsets;
+    }
+
     /**Returns the key-value string for this mention pair,
      * where order is determined by mention precedence (cap:i;mention:j
      * always appears before cap:m;mention:n, where i<=m and j<=n)
@@ -474,6 +635,140 @@ public class Document
         return StringUtil.toKeyValStr(keys, vals);
     }
 
+    /**Returns whether m1 is a subset of m2, according to
+     * the bounding box data and our heuristics; returns
+     * 0: mentions are not in a subset rel
+     * 1: b1 subset b2
+     * 2: b1 = b2 and card(m1) < card(m2)
+     * 3: m1 is a collection, m2 isn't, each box in m1 is
+     *    covered by area in boxes in m2
+     *
+     * @param m1
+     * @param m2
+     * @return
+     */
+    @Deprecated
+    public int getSubsetCase(Mention m1, Mention m2)
+    {
+        //There is no subset link between coreferent mentions nor between nonvisual mentions
+        if(m1.getChainID().equals(m2.getChainID()))
+            return 0;
+        if(m1.getChainID().equals("0") && m2.getChainID().equals("0"))
+            return 0;
+
+        //We cannot know the subset relation between mentions that have no boxes
+        Set<BoundingBox> boxes_1 = getBoxSetForMention(m1);
+        Set<BoundingBox> boxes_2 = getBoxSetForMention(m2);
+        if(boxes_1.isEmpty() || boxes_2.isEmpty())
+            return 0;
+
+        //If these boxes are in a proper subset relationship, don't bother
+        //checking the other heuristics
+        if(getBoxesAreSubset(m1, m2))
+            return 1;
+
+        //determine if these mentions are collective
+        boolean m1_coll = false;
+        String m1_norm = m1.toString().toLowerCase().trim();
+        for(String coll : _collectives){
+            if(m1_norm.endsWith(coll) || m1_norm.contains(coll + " of ")){
+                if(m1.getLexicalType().contains("people") || m1.getLexicalType().contains("animals")){
+                    m1_coll = true;
+                    break;
+                }
+            }
+        }
+        boolean m2_coll = false;
+        String m2_norm = m2.toString().toLowerCase().trim();
+        for(String coll : _collectives){
+            if(m2_norm.endsWith(coll) || m2_norm.contains(coll + " of ")){
+                if(m2.getLexicalType().contains("people") || m2.getLexicalType().contains("animals")){
+                    m2_coll = true;
+                    break;
+                }
+            }
+        }
+
+        //only consider pairs between matching types (or if one is a pronoun
+        if(Mention.getLexicalTypeMatch(m1, m2) > 0) {
+            /*
+            // || m1.getPronounType() != Mention.PRONOUN_TYPE.NONE || m2.getPronounType() != Mention.PRONOUN_TYPE.NONE
+            boolean m2_subj_m1_obj = false;
+            Caption c1 = getCaption(m1.getCaptionIdx());
+            Caption c2 = getCaption(m2.getCaptionIdx());
+
+            //We want to drop candidates for which m2 is the subject of
+            //a verb that m1 is the object of, taking coreference into account
+            //such that if m2_verb_mX and m1 is coref with mX, the relation holds;
+            //Consider
+            //  [Two people] look at [a child]
+            //  [Folks] with [a kid]
+            //'a child' cannot be a subset of 'Two people'; neither can 'a kid'
+            if(c1.equals(c2)){
+                Chunk subj2 = c1.getSubjectOf(m2);
+                if(subj2 != null && subj2.equals(c1.getObjectOf(m1)))
+                    m2_subj_m1_obj = true;
+            } else {
+                Chain ch1 = null, ch2 = null;
+                for(Chain ch : getChainSet()){
+                    if(ch.getMentionSet().contains(m1))
+                        ch1 = ch;
+                    else if(ch.getMentionSet().contains(m2))
+                        ch2 = ch;
+                }
+                if(ch1 != null && ch2 != null){
+                    Chunk subj2 = c2.getSubjectOf(m2);
+                    if(subj2 != null){
+                        for(Mention mPrime : ch2.getMentionSet()){
+                            if(mPrime.getCaptionIdx() == c2.getIdx())
+                                if(subj2.equals(c2.getObjectOf(mPrime)))
+                                    m2_subj_m1_obj = true;
+                        }
+                    }
+                }
+            }
+            */
+
+
+            //For each box in boxes_1, if we can find a box in
+            //boxes_2 for which the IOU exceeds 0.75, this is a subset
+            //relation
+            /*
+            if(boxes_1.size() < boxes_2.size()){
+                boolean missingBox = false;
+                for(BoundingBox b1 : boxes_1){
+                    boolean foundBox = false;
+                    for(BoundingBox b2 : boxes_2){
+                        if(BoundingBox.IOU(b1, b2) >= 0.75)
+                            foundBox = true;
+                    }
+                    if(!foundBox)
+                        missingBox = true;
+                }
+                if(!missingBox)
+                    return 2;
+            }*/
+
+            //if(m2_coll && !m1_coll && !m2_subj_m1_obj){
+            if(m2_coll && !m1_coll){
+                //only consider subsets between m1 and m2 where
+                //  a) m2 is collective
+                //  b) m1 is _not_ collective
+                //  c) the [m2 verb m1] relationship does not hold
+                Area a2 = new Area();
+                boxes_2.forEach(b -> a2.add(new Area(b.getRec())));
+                boolean fullCoverage = true;
+                for(BoundingBox b1 : boxes_1)
+                    if(!a2.contains(b1.getRec()))
+                        fullCoverage = false;
+                if(fullCoverage)
+                    return 3;
+            }
+        }
+
+        return 0;
+    }
+
     /**Returns the key-value string for this mention pair,
      * where order is determined by mention precedence (cap:i;mention:j
      * always appears before cap:m;mention:n, where i<=m and j<=n)
@@ -525,7 +820,7 @@ public class Document
                 sb.append("\t");
                 sb.append(tokenIdx);    //Word number
                 sb.append("\t");
-                sb.append(t.getText()); //the word itself
+                sb.append(t.toString()); //the word itself
                 sb.append("\t");
                 sb.append(t.getPosTag());   //part of speech
                 sb.append("\t");

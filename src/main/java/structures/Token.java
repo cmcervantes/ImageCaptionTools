@@ -145,7 +145,6 @@ public class Token extends Annotation
     }
 
     /* Getters */
-    public String getText(){return _text;}
     public String getLemma(){return _lemma;}
     public int getCaptionIdx(){return _captionIdx;}
     public String getPosTag(){return _posTag;}

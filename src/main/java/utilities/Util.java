@@ -169,11 +169,12 @@ public class Util
     {
         //we want to add all numeral words in the mention together,
         //under the assumption that "twenty two" and "twenty-two" should
-        //both map to 22. This simple logic will break on "four hundred"
-        //(since it would produce 104) but that's not common in our data
+        //both map to 22. For actual numeral values though (7-10), we want to
+        //return the midpoint of the range
         String[] textArr = text.split("-| ");
         Integer countValue = 0;
         for(String word : textArr) {
+            StringUtil.hasAlphaNum(word);
             Integer i = parseInt(word);
             if(i != null)
                 countValue += i;

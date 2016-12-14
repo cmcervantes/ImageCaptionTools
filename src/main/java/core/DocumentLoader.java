@@ -1,13 +1,14 @@
 package core;
 
 import nlptools.DependencyParser;
+import nlptools.WordnetUtil;
 import structures.*;
-import utilities.DBConnector;
-import utilities.FileIO;
-import utilities.Logger;
-import utilities.StringUtil;
+import utilities.*;
 
 import javax.sql.rowset.CachedRowSet;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.util.*;
 
 /**DocumentLoader houses static functions to load Document
@@ -18,7 +19,51 @@ public class DocumentLoader
 {
     public static void main(String[] args)
     {
+        WordnetUtil wnUtil =
+                new WordnetUtil("/Users/syphonnihil/source/data/WordNet-3.0/dict");
 
+
+        String[] headArr = {"sunglass", "hand", "room", "woman",
+                "top", "shorts", "picture", "worker", "glass",
+                "jacket", "day", "water", "grass", "stage", "baby",
+                "dog", "ball", "microphone", "suit", "who", "game",
+                "food", "he", "it", "pants", "that", "head", "them",
+                "dress", "area", "lady", "t-shirt", "guy", "wall",
+                "hat", "chair", "him", "something", "face", "guitar",
+                "bench", "bicycle", "pool", "jeans", "street", "crowd",
+                "side", "sign", "kid", "person", "player", "bike", "car",
+                "park", "beach", "field", "man", "background", "sidewalk",
+                "girl", "shirt", "camera", "coat", "one", "ground",
+                "child", "there", "snow", "helmet", "tree", "people",
+                "uniform", "building", "couple", "other", "air", "boat",
+                "arm", "bag", "table", "boy", "horse", "road", "rock", "hair"};
+
+        for(int i=0; i<headArr.length; i++){
+            HypTree hypTree = wnUtil.getHypernymTree(headArr[i]);
+            for(List<HypTree.HypNode> branch : hypTree.getRootBranches())
+                System.out.println(StringUtil.listToString(branch, " | "));
+            //hypTree.prettyPrint();
+
+            System.out.println("Continue (" + i + ")?");
+            char c = ' ';
+            BufferedReader br =
+                    new BufferedReader(new InputStreamReader(System.in));
+            try{
+                String line = br.readLine();
+                if(line.length() == 1)
+                    c = line.toCharArray()[0];
+                while(c != 'y' && c != 'Y' && c != 'n' && c != 'N'){
+                    System.out.print("y or n, please: ");
+                    line = br.readLine();
+                    if(line.length() == 1)
+                        c = line.toCharArray()[0];
+                }
+            } catch (IOException ioEx) {
+                Logger.log(ioEx);
+            }
+            if(c == 'n' || c == 'N')
+                System.exit(0);
+        }
     }
 
     /**Returns a set of Documents, based on a .coref file
@@ -340,15 +385,31 @@ public class DocumentLoader
         Logger.log("Creating <image>");
         query = "CREATE TABLE IF NOT EXISTS image (img_id VARCHAR(15), "+
                 "height INT, width INT, reviewed TINYINT(1), cross_val "+
-                "TINYINT(1), PRIMARY KEY(img_id));";
+                "TINYINT(1), anno_comments TEXT, PRIMARY KEY(img_id));";
         conn.createTable(query);
         query = insertPrefix + "image(img_id, height, width, reviewed, "+
-                "cross_val) VALUES (?, ?, ?, ?, ?);";
+                "cross_val, anno_comments) VALUES (?, ?, ?, ?, ?, ?);";
         paramSet = new HashSet<>();
-        for(Document d : docSet){
-            Object[] params = {d.getID(), d.height, d.width, d.reviewed, d.crossVal};
-            paramSet.add(params);
+        for(Document d : docSet) {
+            paramSet.add(new Object[]{d.getID(), d.height,
+                    d.width, d.reviewed, d.crossVal, d.comments});
         }
+        conn.update(query, paramSet, batchSize, numThreads);
+
+        /* While not strictly necessary, the <caption> table
+         * contains the full caption string so we can easily
+         * look up captions of various types */
+        Logger.log("Creating <caption>");
+        query = "CREATE TABLE IF NOT EXISTS caption (img_id VARCHAR(15), "+
+                "caption_idx TINYINT(4), caption TEXT, " +
+                "PRIMARY KEY(img_id, caption_idx));";
+        conn.createTable(query);
+        query = insertPrefix + "caption(img_id, caption_idx, caption) "+
+                               "VALUES (?, ?, ?);";
+        paramSet = new HashSet<>();
+        for(Document d : docSet)
+            for(Caption c : d.getCaptionList())
+                paramSet.add(new Object[]{d.getID(), c.getIdx(), c.toString()});
         conn.update(query, paramSet, batchSize, numThreads);
 
         /* The <token> table contains the core token information,
@@ -367,7 +428,7 @@ public class DocumentLoader
             for(Caption c : d.getCaptionList()) {
                 for (Token t : c.getTokenList()) {
                     paramSet.add(new Object[]{d.getID(), c.getIdx(),
-                            t.getIdx(), t.getText(), t.getLemma(),
+                            t.getIdx(), t.toString(), t.getLemma(),
                             t.getPosTag()});
                 }
             }

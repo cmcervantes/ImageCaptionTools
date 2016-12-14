@@ -10,7 +10,7 @@ package structures;
 public class Cardinality
 {
     private int[] _baseValues;
-    private boolean[] _ambiguity;
+    private boolean[] _underdef;
     private boolean _isMass;
 
     /**Default Cardinality constructor, where both the base
@@ -18,12 +18,12 @@ public class Cardinality
      * elements
      *
      * @param baseValues
-     * @param ambiguity
+     * @param underdef
      */
-    public Cardinality(int[] baseValues, boolean[] ambiguity)
+    public Cardinality(int[] baseValues, boolean[] underdef)
     {
         _baseValues = baseValues;
-        _ambiguity = ambiguity;
+        _underdef = underdef;
         _isMass = false;
     }
 
@@ -33,7 +33,7 @@ public class Cardinality
     {
         _isMass = true;
         _baseValues = new int[]{-1,-1};
-        _ambiguity = new boolean[]{false, false};
+        _underdef = new boolean[]{false, false};
     }
 
     /**Cardinality constructor that accepts a cardinality
@@ -49,7 +49,7 @@ public class Cardinality
         if(s.equals("m")) {
             _isMass = true;
             _baseValues = new int[]{-1,-1};
-            _ambiguity = new boolean[]{false, false};
+            _underdef = new boolean[]{false, false};
         } else {
             String[] arr = s.split("\\|");
             boolean setAmbig = arr[0].contains("+");
@@ -57,7 +57,7 @@ public class Cardinality
             int setValue = Integer.parseInt(arr[0].replace("+", ""));
             int elemValue = Integer.parseInt(arr[1].replace("+", ""));
             _baseValues = new int[]{setValue, elemValue};
-            _ambiguity = new boolean[]{setAmbig, elemAmbig};
+            _underdef = new boolean[]{setAmbig, elemAmbig};
             _isMass = false;
         }
     }
@@ -75,23 +75,23 @@ public class Cardinality
 
         StringBuilder sb = new StringBuilder();
         sb.append(_baseValues[0]);
-        if(_ambiguity[0])
+        if(_underdef[0])
             sb.append("+");
         sb.append("|");
         sb.append(_baseValues[1]);
-        if(_ambiguity[1])
+        if(_underdef[1])
             sb.append("+");
         return sb.toString();
     }
 
-    /**Returns whether this Cardinality refers to an ambiguous
+    /**Returns whether this Cardinality refers to an underdefined
      * quantity
      *
      * @return
      */
-    public boolean isAmbiguous()
+    public boolean isUnderdef()
     {
-        return _ambiguity[0] || _ambiguity[1];
+        return _underdef[0] || _underdef[1];
     }
 
     /**Returns either the value of this Cardinality (if it isn't
@@ -106,10 +106,10 @@ public class Cardinality
         //T * U, where T and U are incremented if ambiguous
         //ex.   "Two teams" = (2,1+) = lower bound of 4
         int T = _baseValues[0];
-        if(_ambiguity[0])
+        if(_underdef[0])
             T++;
         int U = _baseValues[1];
-        if(_ambiguity[1])
+        if(_underdef[1])
             U++;
 
         return T * U;
@@ -134,11 +134,11 @@ public class Cardinality
 
         //both are ambiguous but we're unifying them anyway
         //(not recommended) take the smaller
-        if(!c1.isAmbiguous() && !c2.isAmbiguous())
+        if(!c1.isUnderdef() && !c2.isUnderdef())
             return c1.getValue() < c2.getValue() ? c1 : c2;
-        else if(!c1.isAmbiguous())
+        else if(!c1.isUnderdef())
             return c1;
-        else if(!c2.isAmbiguous())
+        else if(!c2.isUnderdef())
             return c2;
 
         //reaching here, we know that both of these Cardinalities
@@ -149,10 +149,10 @@ public class Cardinality
 
     /**Cardinalities c1 and c2 are said to be approximately equal
      * when
-     *  - Both are unambiguous and their values are equal
-     *  - Both are ambiguous
-     *  - One is ambiguous and that ambiguous value could include
-     *    the unambiguous one
+     *  - c1.v = c2.v; if neither card is underdef)
+     *  - c1.v <= c2.v; if c1 is underdef and c2 is not
+     *  - c2.v <= c1.v; if c2 is underdef and c1 is not
+     *  - Both cardinalities are underdefined
      *
      * @param c1
      * @param c2
@@ -163,19 +163,34 @@ public class Cardinality
         if(c1._isMass || c2._isMass)
             return true;
 
-        if(!c1.isAmbiguous() && !c2.isAmbiguous())
+        if(!c1.isUnderdef() && !c2.isUnderdef())
             return c1.getValue() == c2.getValue();
-        else if(c1.isAmbiguous() && c2.isAmbiguous())
+        else if(c1.isUnderdef() && c2.isUnderdef())
             return true;
 
         //Reaching here means one is ambiguous and one isn't,
         //so we just have to ensure the ambiguous one's lower bound
         //is less than the unambiguous one's value
-        if(c1.isAmbiguous())
+        if(c1.isUnderdef())
             return c1.getValue() <= c2.getValue();
-        else if(c2.isAmbiguous())
+        else if(c2.isUnderdef())
             return c2.getValue() <= c1.getValue();
 
         return false;
+    }
+
+    /**Cardinality c1 is said to be less than c2 when
+     * - c1.v < c2.v if neither cardinality is underdef
+     * - c2 is underdefined
+     *
+     * @param c1
+     * @param c2
+     * @return
+     */
+    public static boolean lessThan(Cardinality c1, Cardinality c2)
+    {
+        return (c1.getValue() < c2.getValue() &&
+               !c1.isUnderdef() && !c2.isUnderdef()) ||
+               c2.isUnderdef();
     }
 }

@@ -5,12 +5,12 @@ import edu.mit.jwi.RAMDictionary;
 import edu.mit.jwi.data.ILoadPolicy;
 import edu.mit.jwi.item.*;
 import edu.mit.jwi.morph.WordnetStemmer;
-import structures.Document;
-import structures.Mention;
+import utilities.HypTree;
 import utilities.Logger;
 
 import java.io.File;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
 
 /**The WordnetUtil - unlike everything else
  * currently in the legacy package - is actually
@@ -42,63 +42,64 @@ public class WordnetUtil
         wnStemmer = new WordnetStemmer(wordnetDict);
     }
 
-    /**Returns a mapping of lemmas and their hypernyms, for all documents'
-     * mentions' head words
+    /**Returns the hypernym tree for this lemma, where a sense
+     * is retained if its frequency count is greater than 0 or
+     * -- if no such sense is present -- the first sense is taken;
+     * returns a HypTree
      *
-     * @param docSet
-     * @return
+     * @param lemma - The lemma for which hypernyms are returned
+     * @return      - A HypTree
      */
-    public Map<String, String> getHypernymDict(Collection<Document> docSet)
+    public HypTree getHypernymTree(String lemma)
     {
-        Map<String, String> hypDict = new HashMap<>();
-        for (Document d : docSet){
-            for (Mention m : d.getMentionList()) {
-                String lemma = m.getHead().getLemma().toLowerCase();
-                if (!hypDict.containsKey(lemma))
-                    buildHypernymDict(lemma, hypDict);
-            }
-        }
-        return hypDict;
-    }
+        HypTree tree = new HypTree(lemma);
 
-    /**Populates the given hypDict with hypernym links, or a mapping of
-     * lemma - hypernym lemma pairs for all direct ancestors of
-     * the given lemma
-     *
-     * @param lemma
-     * @param hypDict
-     */
-    private void buildHypernymDict(String lemma, Map<String, String> hypDict)
-    {
-        //get all stems for the lemma
-        for(String stem : wnStemmer.findStems(lemma, POS.NOUN)){
+        //iterate over all the stems of this lemma
+        for(String stem : wnStemmer.findStems(lemma, POS.NOUN)) {
             IIndexWord idxWord = wordnetDict.getIndexWord(stem, POS.NOUN);
-            if(idxWord != null){
-                //take only the first sense; we're assuming it's
-                //the most common usage
-                List<IWordID> wordIDList = idxWord.getWordIDs();
-                if(wordIDList.size() > 0) {
-                    IWordID wordID = wordIDList.get(0);
-                    IWord wordInDict = wordnetDict.getWord(wordID);
-                    ISynset synset = wordInDict.getSynset();
 
-                    //take the first hypernym in the set
-                    List<ISynsetID> hypSet = synset.getRelatedSynsets(Pointer.HYPERNYM);
-                    if(hypSet.size() > 0) {
-                        ISynsetID synID = hypSet.get(0);
-                        ISynset hypSynset = wordnetDict.getSynset(synID);
-                        //store the relationship between this lemma and its hypernym,
-                        //and recurse up the hyp tree
-                        List<IWord> wordList = hypSynset.getWords();
-                        if(!wordList.isEmpty()){
-                            String hypLemma = wordList.get(0).getLemma().toLowerCase();
-                            hypDict.put(lemma, hypLemma);
-                            if(!hypDict.containsKey(hypLemma))
-                                buildHypernymDict(hypLemma, hypDict);
-                        }
-                    }
+            if (idxWord != null) {
+                //We keep only those senses that have frequency counts > 0;
+                //If no frequency counts are greater than 0; take only the
+                //first sense
+                List<IWordID> wordIDs = new ArrayList<>();
+                for (IWordID wordID : idxWord.getWordIDs()) {
+                    IWord word = wordnetDict.getWord(wordID);
+                    if (wordnetDict.getSenseEntry(word.getSenseKey()).getTagCount() > 0)
+                        wordIDs.add(wordID);
+                }
+                if (wordIDs.isEmpty())
+                    wordIDs.add(idxWord.getWordIDs().get(0));
+                wordIDs = wordIDs.subList(0, Math.min(3, wordIDs.size()));
+                for (IWordID wordID : wordIDs) {
+                    IWord word = wordnetDict.getWord(wordID);
+                    int tagCount = wordnetDict.getSenseEntry(word.getSenseKey()).getTagCount();
+                    ISynset synset = word.getSynset();
+                    tree.addChild(synset, null, tagCount);
+                    buildHypernymTree(synset, tree);
                 }
             }
+        }
+
+        return tree;
+    }
+
+    /**At each step, this method iterates through the hypernyms of the given
+     * synset, adding those hypernyms as children to the given lemma in the
+     * given tree, and recurses on each hypernym
+     *
+     * @param synset - The current synset (for which hypernyms are produced)
+     * @param tree   - The tree to build
+     */
+    private void buildHypernymTree(ISynset synset, HypTree tree)
+    {
+        //Add the hypernyms of this synset to the tree and recurse
+        for(ISynsetID hypID : synset.getRelatedSynsets(Pointer.HYPERNYM)){
+            ISynset hypSyn = wordnetDict.getSynset(hypID);
+            IWord hypWord = hypSyn.getWords().get(0);
+            int tagCount = wordnetDict.getSenseEntry(hypWord.getSenseKey()).getTagCount();
+            tree.addChild(hypSyn, synset, tagCount);
+            buildHypernymTree(hypSyn, tree);
         }
     }
 }

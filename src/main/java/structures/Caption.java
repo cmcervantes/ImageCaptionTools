@@ -227,8 +227,8 @@ public class Caption extends Annotation
         return _docID + "#" + _idx;
     }
 
-    /**Returns a list of interstitial chunks between chunks c1 and c2; null if
-     * c1 is adjacent to c2
+    /**Returns a list of interstitial chunks between chunks c1 and c2;
+     * empty list if c1 is adjacent to c2
      * @param c1
      * @param c2
      * @return
@@ -240,12 +240,12 @@ public class Caption extends Annotation
 
         //sublist is [inclusive,exclusive)
         if(startIdx < endIdx)
-            return _chunkList.subList(startIdx, endIdx);
-        return null;
+            return new ArrayList<>(_chunkList.subList(startIdx, endIdx));
+        return new ArrayList<>();
     }
 
-    /**Returns a list of interstitial chunks between mentions m1 and m2; null if
-     * m1 is adjacent to m2
+    /**Returns a list of interstitial chunks between mentions m1 and m2;
+     * empty list if m1 is adjacent to m2
      *
      * @param m1
      * @param m2
@@ -256,6 +256,41 @@ public class Caption extends Annotation
         Chunk lastChunk_1 = m1.getChunkList().get(m1.getChunkList().size()-1);
         Chunk firstChunk_2 = m2.getChunkList().get(0);
         return getInterstitialChunks(lastChunk_1, firstChunk_2);
+    }
+
+    /**Returns a list of interstitial tokens between chunks c1 and c2;
+     * empty list if c1 is adjacent to c2
+     * @param c1
+     * @param c2
+     * @return
+     */
+    public List<Token> getInterstitialTokens(Chunk c1, Chunk c2)
+    {
+        int startIdx = c1.getTokenRange()[1] + 1;
+        int endIdx = c2.getTokenRange()[0];
+
+        //sublist is [inclusive,exclusive)
+        if(startIdx < endIdx)
+            return new ArrayList<>(_tokenList.subList(startIdx, endIdx));
+        return new ArrayList<>();
+    }
+
+    /**Returns a list of interstitial tokens between mentions m1 and m2;
+     * empty list if m1 is adjacent to m2
+     *
+     * @param m1
+     * @param m2
+     * @return
+     */
+    public List<Token> getInterstitialTokens(Mention m1, Mention m2)
+    {
+        if(m1.getChunkList() != null && !m1.getChunkList().isEmpty() &&
+           m2.getChunkList() != null && !m2.getChunkList().isEmpty()){
+            Chunk lastChunk_1 = m1.getChunkList().get(m1.getChunkList().size()-1);
+            Chunk firstChunk_2 = m2.getChunkList().get(0);
+            return getInterstitialTokens(lastChunk_1, firstChunk_2);
+        }
+        return new ArrayList<>();
     }
 
     /**Returns the text of this caption
@@ -340,7 +375,7 @@ public class Caption extends Annotation
 
             //regardless of how we switched, above, we still want
             //to add this token. So add it.
-            sb.append(t.getText());
+            sb.append(t.toString());
             sb.append(" ");
         }
         //if we're still building a mention, close it
@@ -372,7 +407,7 @@ public class Caption extends Annotation
             String chunkType = t.chunkType;
             int chunkIdx = t.chunkIdx;
             if(chunkType == null && includeChunklessTokens){
-                sb.append(t.getText());
+                sb.append(t.toString());
                 sb.append(" ");
             } else if(chunkType != null && chunkIdx != prevChunkIdx){
                 sb.append(t.chunkType);
@@ -481,13 +516,13 @@ public class Caption extends Annotation
             }
 
             boolean internalOf = false;
-            if(t.chunkType != null && t.chunkType.equals("NP") && t.getText().equals("of")){
+            if(t.chunkType != null && t.chunkType.equals("NP") && t.toString().equals("of")){
                 sb.append("[PP ");
                 internalOf = true;
             }
 
             //regardless of what / where we are, add the token
-            sb.append(t.getText());
+            sb.append(t.toString());
             sb.append("/");
             sb.append(t.getPosTag());
             sb.append(" ");
@@ -610,7 +645,7 @@ public class Caption extends Annotation
             }
 
             //regardless of what / where we are, add the token
-            sb.append(t.getText());
+            sb.append(t.toString());
             sb.append(" ");
 
             //set the previous
@@ -707,7 +742,7 @@ public class Caption extends Annotation
             }
 
             //add this line to the string list
-            String[] lineArgs = {t.getText(), t.getPosTag(), label_gold, label_pred};
+            String[] lineArgs = {t.toString(), t.getPosTag(), label_gold, label_pred};
             conllStrings.add(StringUtil.listToString(lineArgs, " "));
 
             //store the current indices for the next iteration

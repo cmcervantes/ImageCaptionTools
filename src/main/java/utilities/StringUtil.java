@@ -190,8 +190,12 @@ public class StringUtil {
      */
     public static String toKeyValStr(String[] keys, Object[] vals){
         List<String> kvList = new ArrayList<>();
-        for(int i=0; i<keys.length; i++)
-            kvList.add(keys[i] + ":" + vals[i].toString());
+        for(int i=0; i<keys.length; i++){
+            String valStr = "null";
+            if(vals[i] != null)
+                valStr = vals[i].toString();
+            kvList.add(keys[i] + ":" + valStr);
+        }
         return listToString(kvList, ";");
     }
 

@@ -22,7 +22,7 @@ public class HtmlIO
     public static String getImgHtm(Document d)
     {
         //get the image source
-        String imgSrc = imgSrcRoot + d.getID() + ".jpg";
+        String imgSrc = imgSrcRoot + d.getID();
 
         //build the row, enclosing it in a table
         //so as not to throw off any formatting

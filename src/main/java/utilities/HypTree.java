@@ -33,19 +33,13 @@ public class HypTree {
      * @param tagCount   - The child tag count
      * @return           - The HypNode that was added
      */
-    public HypNode addChild(ISynset data, ISynset parentData, int tagCount)
+    public HypNode addChild(ISynset data, HypNode parent, int tagCount)
     {
-        HypNode child;
-        if(parentData == null){
-            //if parent is null, add this new node to the root
-            child = new HypNode(data, null, tagCount);
+        HypNode child = new HypNode(data, parent, tagCount);
+        if(parent == null)
             _rootBranches.add(child);
-        } else {
-            //else, add this new node to a parent
-            HypNode parent = getNode(parentData);
-            child = new HypNode(data, parent, tagCount);
+        else
             parent._children.add(child);
-        }
         return child;
     }
 

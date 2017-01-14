@@ -2,7 +2,6 @@ package structures;
 
 import utilities.FileIO;
 import utilities.StringUtil;
-import utilities.Util;
 
 import java.util.*;
 
@@ -17,10 +16,17 @@ import java.util.*;
  */
 public class Mention extends Annotation
 {
-    //Word lists, initialized with initWordLists()
-    private static Set<String> _massNouns;
-    private static Map<String, Integer> _specialCollectiveNouns;
-    private static Set<String> _collectiveNouns;
+    private static Set<String> _numerics;
+    static{
+        String[] numericArr = {"one", "two", "three",
+                "four", "five", "six", "seven", "eight",
+                "nine", "ten", "eleven", "twelve", "few",
+                "group", "number", "various", "couple",
+                "multiple", "several", "single", "first",
+                "second", "third", "numerous", "lot", "1",
+                "2", "3", "lots"};
+        _numerics = new HashSet<>(Arrays.asList(numericArr));
+    }
 
     //Lexicon dict, initialized with initLexiconDict
     private static Map<String, String> _lexiconDict;
@@ -120,145 +126,10 @@ public class Mention extends Annotation
         else
             _lexType = lexicalType;
         if(card == null){
-            //if we haven't initialized the collective noun
-            //list (as is the case when we're loading mentions
-            //from a database), set this card as null
-            if(_collectiveNouns == null)
-                _card = null;
-            else
-                initCardinality();
+            _card = Cardinality.parseCardinality(_tokenList);
         } else {
             _card = card;
         }
-    }
-
-    /**Initializes the mention's Cardinality, based on the mention's
-     * head and text; Cardinality is null if mass, and (1,0+) in cases
-     * where the head is not a noun
-     */
-    private void initCardinality()
-    {
-        //don't bother with this if we don't have a head or
-        //head pos
-        Token headToken = getHead();
-        if(headToken == null || headToken.getPosTag() == null)
-            return;
-
-        //if this is a pronoun, initialize its cardinality by lexicon
-        Boolean isPluralPronoun = PRONOUN_TYPE.getIsPlural(this.toString().toLowerCase());
-        if(isPluralPronoun != null){
-            if(isPluralPronoun){
-                _card = new Cardinality(new int[]{1, 0},
-                        new boolean[]{false, true});
-            } else {
-                _card = new Cardinality(new int[]{1, 1},
-                        new boolean[]{false, false});
-            }
-            return;
-        }
-
-        /**From a paper draft in which a mention's cardinality - η(m) - is defined
-         *
-         * Data:
-         *      Mention m (head word: m_h; text: m_t;)
-         *      Token part of speech: t_pos
-         *      C: List of collective nouns
-         *      S: (k, v) mapping of special collective nouns and countable values
-         *      M: List of mass nouns
-         * Result:
-         *      η(m) as either a (T, U) tuple or ’mass’
-         *      T=1;U=0+;
-         *      if m_h ∈ M ∧ not t ∈ {DT,CD}, for all t ∈ m_t ; t < m_h
-         *          return mass
-         *      if m_h_pos ∈ {NN,NNP}
-         *          U = 1;
-         *      else if m_h ∈ C ∨ m_h_pos ∈ {NNS, NNPS}
-         *          U = 1+;
-         *      if m_h ∈ C ∧ m_h_pos ∈ {NNS,NNPS}
-         *          T = 1+;
-         *      if m_h ∈ S
-         *          U = S(m_h);
-         *      if   t_pos = CD; for all t ∈ m_t; t != m_h
-         *          v = combined CD value;
-         *          if m_h_pos ∈ {NN,NNP}
-         *              U = v;
-         *          else if m_h_pos ∈ {NNS,NNPS}
-         *              T = v;
-         *       return (T,U);
-         */
-        int setVal = 1;
-        int elemVal = 0;
-        boolean setAmbig = false;
-        boolean elemAmbig = true;
-        boolean collectiveHead = _collectiveNouns.contains(headToken.getLemma());
-        boolean singularHead = headToken.getPosTag().equals("NN") ||
-                headToken.getPosTag().equals("NNP");
-        boolean pluralHead = headToken.getPosTag().equals("NNS") ||
-                headToken.getPosTag().equals("NNPS");
-
-        //if our head is a mass noun and isn't preceded by a determiner
-        //or a count word, this is mention has no cardinality
-        boolean containsPrecedingDetOrNum = false;
-        for(Token t : _tokenList){
-            if(t.getIdx() < headToken.getIdx()){
-                String posTag = t.getPosTag();
-                if(posTag.equals("DT") || posTag.equals("CD"))
-                    containsPrecedingDetOrNum = true;
-            }
-        }
-        if(_massNouns.contains(headToken.getLemma()) && !containsPrecedingDetOrNum){
-            _card = new Cardinality();
-            return;
-        }
-
-        //if our head is a singular noun, this mention refers to T sets of 1 element
-        if(singularHead){
-            elemVal = 1;
-            elemAmbig = false;
-        }
-
-        //if the head is a collective noun or is a plural noun,
-        //this mention refers to T sets of 1 or more elements
-        if(collectiveHead || pluralHead) {
-            elemVal = 1;
-            elemAmbig = true;
-        }
-
-        //if the head is a collective noun _and_ is a plural noun,
-        //this mention refers to 1+ sets of U elements
-        if(collectiveHead && pluralHead) {
-            setVal = 1;
-            setAmbig = true;
-        }
-
-        //if the head is a special collective noun, get its value
-        if(_specialCollectiveNouns.containsKey(headToken.getLemma())){
-            elemVal = _specialCollectiveNouns.get(headToken.getLemma());
-            elemAmbig = false;
-        }
-
-        //If this mention doesn't contain "number" or "#" -
-        //which indicate an actual number in the image, rather
-        //than a quantity - get the value for the mention's numerals,
-        //if it has any
-        String text = this.toString().toLowerCase().trim();
-        if(!text.contains("number") && !text.contains("#")){
-            Integer numeralVal = Util.getNumeralValue(text);
-            if(numeralVal != null){
-                //if the head is a singular noun, set U to its value
-                //otherwise, set T to its value
-                if(singularHead){
-                    elemVal = numeralVal;
-                    elemAmbig = false;
-                } else if(pluralHead){
-                    setVal = numeralVal;
-                    setAmbig = false;
-                }
-            }
-        }
-
-        _card = new Cardinality(new int[]{setVal, elemVal},
-                new boolean[]{setAmbig, elemAmbig});
     }
 
     /**Initializes this mention's lexical type, assuming the static
@@ -361,7 +232,7 @@ public class Mention extends Annotation
      * @param hypernymSet
      * @return  male/female/neuter
      */
-    public String getGender(Set<String> hypernymSet)
+    public String getGender(Collection<String> hypernymSet)
     {
         String gender = getGender();
         if (gender.equals("neuter") && hypernymSet != null) {
@@ -419,6 +290,32 @@ public class Mention extends Annotation
         return StringUtil.toKeyValStr(keys, vals);
     }
 
+    /**Returns this mention's modifier strings as an
+     * {numeric, other} pair. Modifiers are non-terminal
+     * tokens with POS tags other than DT (determiner) or
+     * IN (preposition). Numeric consist of tokens in
+     * a list, corresponding to various numerals and
+     * quantifiers
+     *
+     * @return This mentions modifiers, as a {numeric, other}
+     *         pair
+     */
+    public String[] getModifiers()
+    {
+        String mod_numeric = "", mod_other = "";
+        for(int i=0; i<_tokenList.size() - 1; i++){
+            Token t = _tokenList.get(i);
+            if(!t.getPosTag().equals("DT") && !t.getPosTag().equals("IN")){
+                String mod = StringUtil.keepAlphaNum(t.toString()).toLowerCase();
+                if(_numerics.contains(mod))
+                    mod_numeric += mod;
+                else
+                    mod_other += mod;
+            }
+        }
+        return new String[]{mod_numeric, mod_other};
+    }
+
     /**Returns whether the lexical types for m1 and m2 match;
      * 1 if exact match, 0 if no match, and 0.5 if they overlap
      * inexactly
@@ -440,28 +337,6 @@ public class Mention extends Annotation
             return 0.5;
 
         return 0.0;
-    }
-
-    /**Function to initialize static word lists;
-     * Intended to be populated only when needed,
-     * as the standard workflow should not have to
-     * build mentions from scratch
-     */
-    public static void initWordLists(String dataRoot)
-    {
-        _massNouns =
-                new HashSet<>(FileIO.readFile_lineList(dataRoot +
-                        "massNouns.txt", true));
-        _collectiveNouns =
-                new HashSet<>(FileIO.readFile_lineList(dataRoot +
-                        "collectiveNouns.txt", true));
-
-        String[][] specialNounTable =
-                FileIO.readFile_table(dataRoot +
-                        "specialCollectiveNouns.csv");
-        _specialCollectiveNouns = new HashMap<>();
-        for(String[] row : specialNounTable)
-            _specialCollectiveNouns.put(row[0], Integer.parseInt(row[1]));
     }
 
     /**Function to initialize static lexicon dict;
@@ -496,7 +371,8 @@ public class Mention extends Annotation
     {
         SUBJECTIVE_SINGULAR, SUBJECTIVE_PLURAL, OBJECTIVE_SINGULAR,
         OBJECTIVE_PLURAL, REFLEXIVE_SINGULAR, REFLEXIVE_PLURAL,
-        RECIPROCAL, RELATIVE, DEMONSTRATIVE, INDEFINITE, OTHER, NONE;
+        RECIPROCAL, RELATIVE, DEMONSTRATIVE, INDEFINITE, SEMI,
+        OTHER, NONE;
 
         private static Map<PRONOUN_TYPE, Set<String>> typeWordSetDict;
         private static Set<String> wordSet_sing;
@@ -601,27 +477,29 @@ public class Mention extends Annotation
             wordSet_sing.add("somebody");
             wordSet_sing.add("someone");
 
-            //special pronouns are special
-            typeWordSetDict.get(OTHER).add("another");
-            typeWordSetDict.get(OTHER).add("other");
-            typeWordSetDict.get(OTHER).add("others");
-            typeWordSetDict.get(OTHER).add("both");
-            typeWordSetDict.get(OTHER).add("one");
-            typeWordSetDict.get(OTHER).add("two");
-            typeWordSetDict.get(OTHER).add("three");
-            typeWordSetDict.get(OTHER).add("four");
-            typeWordSetDict.get(OTHER).add("all");
-            typeWordSetDict.get(OTHER).add("some");
+            //semi-pronouns introduce new elements to the caption
+            typeWordSetDict.get(SEMI).add("another");
+            typeWordSetDict.get(SEMI).add("other");
+            typeWordSetDict.get(SEMI).add("others");
+            typeWordSetDict.get(SEMI).add("one");
+            typeWordSetDict.get(SEMI).add("two");
+            typeWordSetDict.get(SEMI).add("three");
+            typeWordSetDict.get(SEMI).add("four");
+            typeWordSetDict.get(SEMI).add("some");
             wordSet_sing.add("another");
             wordSet_sing.add("other");
             wordSet_plural.add("others");
-            wordSet_plural.add("both");
-            wordSet_plural.add("all");
-            wordSet_plural.add("some");
             wordSet_sing.add("one");
             wordSet_plural.add("two");
             wordSet_plural.add("three");
             wordSet_plural.add("four");
+            wordSet_plural.add("some");
+
+            //special pronouns are special
+            typeWordSetDict.get(OTHER).add("both");
+            typeWordSetDict.get(OTHER).add("all");
+            wordSet_plural.add("both");
+            wordSet_plural.add("all");
         }
 
         /**Returns whether given string s is a plural pronoun, false if

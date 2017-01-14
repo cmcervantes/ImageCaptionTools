@@ -189,7 +189,6 @@ public class Caption extends Annotation
      * @param ch
      * @return
      */
-    @Deprecated
     public Chunk getLeftNeighbor(Chunk ch)
     {
         if(ch.getIdx() > 0)
@@ -203,7 +202,6 @@ public class Caption extends Annotation
      * @param ch
      * @return
      */
-    @Deprecated
     public Chunk getRightNeighbor(Chunk ch)
     {
         if(ch.getIdx() < _chunkList.size() - 1)
@@ -543,28 +541,24 @@ public class Caption extends Annotation
         return getUniqueID() + "\t" + sb.toString().trim();
     }
 
-
     /**Returns this caption as an entities string (ostensibly for inclusion in a .txt
-     * file included with the Flickr30kEntities dataset), where a type dictionary
-     * is necessary to find entity types;
+     * file included with the Flickr30kEntities dataset)
      *
      * FORMAT:  [/EN#chainID/lexicalType text ] text ...
      * EX:      [/EN#5/people Two teams ] compete ...
      *
-     * @param typeDict
      * @return
      */
-    public String toEntitiesString(Map<String, String> typeDict)
+    public String toEntitiesString()
     {
         Map<Integer, String> tokenChainDict = new HashMap<>();
         for(Token t : _tokenList)
             tokenChainDict.put(t.getIdx(), t.chainID);
-        return toEntitiesString(tokenChainDict, typeDict);
+        return toEntitiesString(tokenChainDict);
     }
 
     /**Returns this caption as an entities string (ostensibly for inclusion in a .txt
-     * file included with the Flickr30kEntities dataset), where a type dictionary
-     * is necessary to find entity types;
+     * file included with the Flickr30kEntities dataset);
      * Optional argument tokenChainDict allows mentions to be re-mapped to new chainIDs
      * (necessary during dataset revisions); uses token chainIDs by default
      *
@@ -572,33 +566,13 @@ public class Caption extends Annotation
      * EX:      [/EN#5/people Two teams ] compete ...
      *
      * @param tokenChainDict
-     * @param typeDict
      * @return
      */
-    public String toEntitiesString(Map<Integer, String> tokenChainDict,
-                                   Map<String, String> typeDict)
+    public String toEntitiesString(Map<Integer, String> tokenChainDict)
     {
-        //In this unfortunately hacky time of 'putting a bow on the new
-        //dataset', I'm going to map entities to their lexical types ahead
-        //of time.
-        //TODO: in the future, redo this to use mentions and their
-        //      types, which we should have set before getting here
         Map<Integer, String> entityTypeDict = new HashMap<>();
-        for(Mention m : _mentionList){
-            //take the longest match, distinguishing between
-            //buffalo and water buffalo
-            String type = "other";
-            int matchLength = -1;
-            for(String s : typeDict.keySet()){
-                if(s.length() >= matchLength){
-                    if(m.toString().endsWith(s)){
-                        type = typeDict.get(s);
-                        matchLength = s.length();
-                    }
-                }
-            }
-            entityTypeDict.put(m.getIdx(), type);
-        }
+        for(Mention m : _mentionList)
+            entityTypeDict.put(m.getIdx(), m.getLexicalType());
 
         StringBuilder sb = new StringBuilder();
         int prevEntityIdx = -1;

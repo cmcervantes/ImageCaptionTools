@@ -1,12 +1,9 @@
 package structures;
 
-import utilities.FileIO;
-import utilities.Logger;
-import utilities.StringUtil;
-import utilities.XmlIO;
+import utilities.*;
 
+import javax.print.Doc;
 import java.awt.*;
-import java.awt.geom.Area;
 import java.util.*;
 import java.util.List;
 
@@ -424,6 +421,27 @@ public class Document
         return Document.toConll2012(this, chainSet);
     }
 
+    /**Returns a set of chain pairs that are in
+     * the subset relation
+     *
+     * @return
+     */
+    public Set<Chain[]> getSubsetChains()
+    {
+        Set<Chain[]> subsetChains = new HashSet<>();
+
+        for(String pairStr : getSubsetMentions()) {
+            Mention[] pair = getMentionPairFromStr(pairStr);
+            Chain sub = _chainDict.get(pair[0].getChainID());
+            Chain sup = _chainDict.get(pair[1].getChainID());
+            Chain[] chainPair = {sub, sup};
+            if(!Util.containsArr(subsetChains, chainPair))
+                subsetChains.add(chainPair);
+        }
+
+        return subsetChains;
+    }
+
     /**Returns the set of subset pairs (as unique ID strings),
      * for this Document; superset pairs can be inferred by
      * reversing each of the pairs
@@ -432,57 +450,107 @@ public class Document
      */
     public Set<String> getSubsetMentions()
     {
-        Set<String> subsets = new HashSet<>();
+        //get the gold nonvis / coref lists, from the gold
+        Set<String> nonvisuals = new HashSet<>();
+        Set<String> corefPairs = new HashSet<>();
         List<Mention> mentionList = getMentionList();
-
-        Set<Mention[]> subsets_box = new HashSet<>();
-        Set<Mention[]> subsets_heur = new HashSet<>();
-
-        //Get all mention pairs with boxes in the subset relation
         for(int i=0; i<mentionList.size(); i++){
             Mention m_i = mentionList.get(i);
-            if(m_i.getChainID().equals("0"))
+            if(m_i.getChainID().equals("0")){
+                nonvisuals.add(m_i.getUniqueID());
                 continue;
+            }
 
             for(int j=i+1; j<mentionList.size(); j++){
                 Mention m_j = mentionList.get(j);
+                String id_ij = Document.getMentionPairStr(m_i, m_j, true, true);
+                String id_ji = Document.getMentionPairStr(m_j, m_i, true, true);
 
-                if(m_j.getChainID().equals("0"))
-                    continue;
-
-                if(getBoxesAreSubset(m_i, m_j))
-                    subsets_box.add(new Mention[]{m_i, m_j});
-                else if(getBoxesAreSubset(m_j, m_i))
-                    subsets_box.add(new Mention[]{m_j, m_i});
+                if(!m_j.getChainID().equals("0") &&
+                   !m_i.getChainID().equals(m_j.getChainID())){
+                    corefPairs.add(id_ij); corefPairs.add(id_ji);
+                }
             }
         }
 
-        //Get all mention pairs in our syntactic structures
+        //Get the subset pairs
+        Set<Mention[]> subsets = new HashSet<>();
+        subsets.addAll(_getSubsetMentions_boxes());
+        subsets.addAll(_getSubsetMentions_heuristic(nonvisuals, corefPairs, false));
+        subsets = _cascadeSubsetMentions(subsets, corefPairs);
+        Set<String> subsetPairIDs = new HashSet<>();
+        for(Mention[] pair : subsets)
+            subsetPairIDs.add(getMentionPairStr(pair[0], pair[1], true, true));
+        return subsetPairIDs;
+    }
+
+    /**Returns pairs of subset mentions (ordered as sub,sup),
+     * excluding mentions in the nonvisuals set and links in
+     * the corefPairs set; intended for use with predicted
+     * nonvisuals / coref pairs (to get predicted
+     * subset links)
+     *
+     * @param nonvisuals
+     * @param corefPairs
+     * @return
+     */
+    public Set<String> getSubsetMentions_heuristic(Set<String> nonvisuals, Set<String> corefPairs)
+    {
+        Set<String> subsetPairs = new HashSet<>();
+        for(Mention[] pair : _getSubsetMentions_heuristic(nonvisuals, corefPairs, true))
+            subsetPairs.add(Document.getMentionPairStr(pair[0], pair[1], true, true));
+        return subsetPairs;
+    }
+
+    /**Returns pairs of subset mentions (ordered as sub,sup),
+     * excluding mentions in the nonvisuals set and links in
+     * the corefPairs set; cascades mentions (subset transitivity)
+     * if specified
+     *
+     * @param nonvisuals
+     * @param corefPairs
+     * @param cascade
+     * @return
+     */
+    private Set<Mention[]> _getSubsetMentions_heuristic(Set<String> nonvisuals,
+            Set<String> corefPairs, boolean cascade)
+    {
+        Set<Mention[]> subsets = new HashSet<>();
         for(Caption c : _captionList){
-            Mention xInRelevantXofY = null;
-            if(!c.getMentionList().isEmpty()){
-                Mention m0 = c.getMentionList().get(0);
-                for(int i=2; i<c.getMentionList().size(); i++){
-                    Mention m = c.getMentionList().get(i-1);
-                    Mention mPrime = c.getMentionList().get(i);
-                    if(m0.getChainID().equals(mPrime.getChainID())){
-                        List<Token> inters = c.getInterstitialTokens(m, mPrime);
-                        if(inters.size() == 1 && inters.get(0).toString().equals("of"))
-                            xInRelevantXofY = m;
-                    }
+            Set<Mention[]> subsetsToAdd = new HashSet<>();
+
+            //if for some reason this caption has no mentions, just continue
+            if(c.getMentionList().isEmpty())
+                continue;
+
+            //grab the first mention
+            Mention m0 = c.getMentionList().get(0);
+
+            //Find all mentions in this caption such that
+            // a) the mention is X in an XofY
+            // b) the Y is coreferent with the first mention
+            //Typically there will only be one of these per caption,
+            //but this is not guaranteed
+            for(int i=2; i<c.getMentionList().size(); i++){
+                Mention m = c.getMentionList().get(i-1);
+                Mention mPrime = c.getMentionList().get(i);
+                List<Token> inters = c.getInterstitialTokens(m, mPrime);
+
+                //if this is an XofY and Y is coreferent with the first mention,
+                //add it to the set
+                if(inters.size() == 1 && inters.get(0).toString().equals("of") &&
+                   corefPairs.contains(Document.getMentionPairStr(mPrime, m0, true, true))){
+                    subsetsToAdd.add(new Mention[]{m, mPrime});
+                    subsetsToAdd.add(new Mention[]{m, m0});
                 }
             }
 
-            //grab the first mention
-            Mention m0 = null;
-            if(!c.getMentionList().isEmpty())
-                m0 = c.getMentionList().get(0);
-
-            if(c.toChunkTypeString(true).matches(PTRN_APPOS) && !c.toChunkTypeString(true).matches(PTRN_LIST)){
+            //Determine if this caption's chunk string (including extra-chunk tokens)
+            //matches the appositive but _not_ the list pattern (since they overlap)
+            if(c.toChunkTypeString(true).matches(PTRN_APPOS) &&
+                    !c.toChunkTypeString(true).matches(PTRN_LIST)){
+                //If we have a match, grab the first NP and VP
                 Chunk firstNP = m0.getChunkList().get(m0.getChunkList().size() - 1);
-
-                //Get everything between the first mention
-                //and the first verb chunk
                 Chunk firstVP = null;
                 for(Chunk ch : c.getChunkList()){
                     if(ch.getChunkType().equals("VP")){
@@ -491,9 +559,10 @@ public class Document
                     }
                 }
 
-                //Get interstitial chunks
-                if(firstVP != null){
+                //If we have an NP/VP, get the interstitial chunks
+                if(firstNP != null && firstVP != null){
                     List<Token> interstitial = c.getInterstitialTokens(firstNP, firstVP);
+
                     //If this span is enclosed by commas, strip them
                     if(interstitial.get(0).toString().equals(","))
                         interstitial.remove(0);
@@ -526,8 +595,8 @@ public class Document
 
                             //Mentions can only be in a subset relation if they
                             //  a) have matching lexical types
-                            //  b) the latter mention is a pronoun
-                            //  c) the latter mention is a numeral
+                            //  b) the latter mention is a pronoun or
+                            //  c) the latter mention is a numeral or
                             //  d) the latter is some variant of 'other'
                             boolean mIsNum = false;
                             try{
@@ -544,40 +613,167 @@ public class Document
                     }
                     if(!subsetMentions.isEmpty()){
                         for(Mention m : subsetMentions)
-                            subsets_heur.add(new Mention[]{m, m0});
+                            subsetsToAdd.add(new Mention[]{m, m0});
                     }
                 }
-            } else if(xInRelevantXofY != null){
-                //assign subset to mention 0
-                subsets_heur.add(new Mention[]{xInRelevantXofY, m0});
+            }
+            //We do not add subset links where either mention is in our
+            //set of nonvisuals or if the link is in our set of coref links
+            for(Mention[] pair : subsetsToAdd){
+                Mention sub = pair[0], sup = pair[1];
+                if(!nonvisuals.contains(sub.getUniqueID()) &&
+                   !nonvisuals.contains(sup.getUniqueID()) &&
+                   !corefPairs.contains(Document.getMentionPairStr(sub, sup, true, true)) &&
+                   !corefPairs.contains(Document.getMentionPairStr(sup, sub, true, true))){
+                    subsets.add(pair);
+                }
             }
         }
 
-        //if we've identified m \subset m' according to the heuristics, then
-        //m \subset m'', where m' is coref with m''; similarly
-        //mm \subset m' where mm is coref with m
-        List<Mention[]> subsets_heur_list = new ArrayList<>(subsets_heur);
-        for(Mention[] pair : subsets_heur_list){
-            Mention sub = pair[0], sup = pair[1];
-            List<Mention> subMentions = new ArrayList<>();
-            List<Mention> supMentions = new ArrayList<>();
-            for(Mention m : mentionList){
-                if(sub.getChainID().equals(m.getChainID()))
-                    subMentions.add(m);
-                else if(sup.getChainID().equals(m.getChainID()))
-                    supMentions.add(m);
-            }
-            for(Mention subM : subMentions)
-                for(Mention supM : supMentions)
-                    subsets_heur.add(new Mention[]{subM, supM});
-        }
-
-        //Finally, reduce both subset sets to unique IDs, to throw away dups
-        for(Mention[] pair : subsets_box)
-            subsets.add(Document.getMentionPairStr(pair[0], pair[1], true, true));
-        for(Mention[] pair : subsets_heur)
-            subsets.add(Document.getMentionPairStr(pair[0], pair[1], true, true));
+        if(cascade)
+            subsets = _cascadeSubsetMentions(subsets, corefPairs);
         return subsets;
+    }
+
+    /**Returns pairs of subset mentions (ordered as sub,sup),
+     * excluding gold nonvis and gold coref; intended to
+     * retrieve gold subset links
+     *
+     * @return
+     */
+    private Set<Mention[]> _getSubsetMentions_boxes()
+    {
+        Set<Mention[]> subsets = new HashSet<>();
+        List<Mention> mentionList = getMentionList();
+        for(int i=0; i<mentionList.size(); i++){
+            Mention m_i = mentionList.get(i);
+            if(m_i.getChainID().equals("0"))
+                continue;
+
+            for(int j=i+1; j<mentionList.size(); j++){
+                Mention m_j = mentionList.get(j);
+
+                if(m_j.getChainID().equals("0"))
+                    continue;
+
+                //skip coreferent pairs
+                if(m_i.getChainID().equals(m_j.getChainID()))
+                    continue;
+
+                //If our boxes are in a proper subset relationship,
+                //add them to the set
+                if(getBoxesAreSubset(m_i, m_j))
+                    subsets.add(new Mention[]{m_i, m_j});
+                else if(getBoxesAreSubset(m_j, m_i))
+                    subsets.add(new Mention[]{m_j, m_i});
+                else {
+                    //If these mentions aren't in a subset relation,
+                    //check if IOU accounts for the mismatch (people only)
+                    if(m_i.getLexicalType().contains("people") &&
+                       m_j.getLexicalType().contains("people")){
+                        Set<BoundingBox> boxes_i = getBoxSetForMention(m_i);
+                        Set<BoundingBox> boxes_j = getBoxSetForMention(m_j);
+                        if(!boxes_i.isEmpty() && !boxes_j.isEmpty()){
+                            boolean ij_ordering = boxes_i.size() < boxes_j.size();
+
+                            Set<BoundingBox> boxes_1, boxes_2;
+                            if(ij_ordering){
+                                boxes_1 = boxes_i; boxes_2 = boxes_j;
+                            } else {
+                                boxes_1 = boxes_j; boxes_2 = boxes_i;
+                            }
+
+                            boolean coveredallBoxes = true;
+                            for(BoundingBox b_1 : boxes_1) {
+                                if(!boxes_2.contains(b_1)){
+                                    boolean foundMatch = false;
+                                    for(BoundingBox b_2 : boxes_2)
+                                        if(BoundingBox.IOU(b_1, b_2) > 0.9)
+                                            foundMatch = true;
+                                    if(!foundMatch)
+                                        coveredallBoxes = false;
+                                }
+                            }
+
+                            if(coveredallBoxes) {
+                                if(ij_ordering)
+                                    subsets.add(new Mention[]{m_i, m_j});
+                                else
+                                    subsets.add(new Mention[]{m_j, m_i});
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return subsets;
+    }
+
+    /**Cascades the given subset links, enforcing subset transitivity, such that
+     * 1) if a sub b and b sub c -> a sub c
+     * 2) if a sub b, c sub d, and b coref c -> a sub d
+     *
+     * @param subsets
+     * @param corefPairs
+     * @return
+     */
+    private static Set<Mention[]> _cascadeSubsetMentions(Set<Mention[]> subsets, Set<String> corefPairs)
+    {
+        List<Mention[]> subsetList;
+        do{
+            subsetList = new ArrayList<>(subsets);
+            for(int i=0; i<subsetList.size(); i++){
+                Mention sub_i = subsetList.get(i)[0];
+                Mention sup_i = subsetList.get(i)[1];
+
+                for(int j=i+1; j<subsetList.size(); j++){
+                    Mention sub_j = subsetList.get(j)[0];
+                    Mention sup_j = subsetList.get(j)[1];
+
+                    //In practice we're really either adding a
+                    //sub_i -> sup_j link or a sub_j -> sup_i link,
+                    //so we can combine appropriately
+                    Mention[] pairToAdd = null;
+                    if(sup_i.equals(sub_j) || //ij ordering
+                       corefPairs.contains(Document.getMentionPairStr(sup_i, sub_j, true, true)) ||
+                       corefPairs.contains(Document.getMentionPairStr(sub_j, sup_i, true, true))) {
+                        pairToAdd = new Mention[]{sub_i, sup_j};
+                    } else if(sup_j.equals(sub_i) || //ji ordering
+                              corefPairs.contains(Document.getMentionPairStr(sub_i, sup_j, true, true)) ||
+                              corefPairs.contains(Document.getMentionPairStr(sup_j, sub_i, true, true))) {
+                        pairToAdd = new Mention[]{sub_j, sup_i};
+                    }
+
+                    //Only add pairs that aren't already in the set _and_ that do not
+                    //appear in the inverse
+                    if(pairToAdd != null){
+                        if(!Util.containsArr(subsets, pairToAdd) &&
+                           !Util.containsArr(subsets, new Mention[]{pairToAdd[1], pairToAdd[0]})){
+                            subsets.add(pairToAdd);
+                        }
+                    }
+                }
+            }
+        } while(subsetList.size() != subsets.size());
+        return subsets;
+    }
+
+    /**Returns the pair of mention objects specified in the
+     * given mention pair string
+     *
+     * @param mentionPairStr
+     * @return
+     */
+    public Mention[] getMentionPairFromStr(String mentionPairStr)
+    {
+        Map<String, String> idDict = StringUtil.keyValStrToDict(mentionPairStr);
+        int capIdx_1 = Integer.parseInt(idDict.get("caption_1"));
+        int capIdx_2 = Integer.parseInt(idDict.get("caption_2"));
+        int mentionIdx_1 = Integer.parseInt(idDict.get("mention_1"));
+        int mentionIdx_2 = Integer.parseInt(idDict.get("mention_2"));
+        Mention m1 = _captionList.get(capIdx_1).getMentionList().get(mentionIdx_1);
+        Mention m2 = _captionList.get(capIdx_2).getMentionList().get(mentionIdx_2);
+        return new Mention[]{m1,m2};
     }
 
     /**Returns the key-value string for this mention pair,
@@ -635,140 +831,6 @@ public class Document
         return StringUtil.toKeyValStr(keys, vals);
     }
 
-    /**Returns whether m1 is a subset of m2, according to
-     * the bounding box data and our heuristics; returns
-     * 0: mentions are not in a subset rel
-     * 1: b1 subset b2
-     * 2: b1 = b2 and card(m1) < card(m2)
-     * 3: m1 is a collection, m2 isn't, each box in m1 is
-     *    covered by area in boxes in m2
-     *
-     * @param m1
-     * @param m2
-     * @return
-     */
-    @Deprecated
-    public int getSubsetCase(Mention m1, Mention m2)
-    {
-        //There is no subset link between coreferent mentions nor between nonvisual mentions
-        if(m1.getChainID().equals(m2.getChainID()))
-            return 0;
-        if(m1.getChainID().equals("0") && m2.getChainID().equals("0"))
-            return 0;
-
-        //We cannot know the subset relation between mentions that have no boxes
-        Set<BoundingBox> boxes_1 = getBoxSetForMention(m1);
-        Set<BoundingBox> boxes_2 = getBoxSetForMention(m2);
-        if(boxes_1.isEmpty() || boxes_2.isEmpty())
-            return 0;
-
-        //If these boxes are in a proper subset relationship, don't bother
-        //checking the other heuristics
-        if(getBoxesAreSubset(m1, m2))
-            return 1;
-
-        //determine if these mentions are collective
-        boolean m1_coll = false;
-        String m1_norm = m1.toString().toLowerCase().trim();
-        for(String coll : _collectives){
-            if(m1_norm.endsWith(coll) || m1_norm.contains(coll + " of ")){
-                if(m1.getLexicalType().contains("people") || m1.getLexicalType().contains("animals")){
-                    m1_coll = true;
-                    break;
-                }
-            }
-        }
-        boolean m2_coll = false;
-        String m2_norm = m2.toString().toLowerCase().trim();
-        for(String coll : _collectives){
-            if(m2_norm.endsWith(coll) || m2_norm.contains(coll + " of ")){
-                if(m2.getLexicalType().contains("people") || m2.getLexicalType().contains("animals")){
-                    m2_coll = true;
-                    break;
-                }
-            }
-        }
-
-        //only consider pairs between matching types (or if one is a pronoun
-        if(Mention.getLexicalTypeMatch(m1, m2) > 0) {
-            /*
-            // || m1.getPronounType() != Mention.PRONOUN_TYPE.NONE || m2.getPronounType() != Mention.PRONOUN_TYPE.NONE
-            boolean m2_subj_m1_obj = false;
-            Caption c1 = getCaption(m1.getCaptionIdx());
-            Caption c2 = getCaption(m2.getCaptionIdx());
-
-            //We want to drop candidates for which m2 is the subject of
-            //a verb that m1 is the object of, taking coreference into account
-            //such that if m2_verb_mX and m1 is coref with mX, the relation holds;
-            //Consider
-            //  [Two people] look at [a child]
-            //  [Folks] with [a kid]
-            //'a child' cannot be a subset of 'Two people'; neither can 'a kid'
-            if(c1.equals(c2)){
-                Chunk subj2 = c1.getSubjectOf(m2);
-                if(subj2 != null && subj2.equals(c1.getObjectOf(m1)))
-                    m2_subj_m1_obj = true;
-            } else {
-                Chain ch1 = null, ch2 = null;
-                for(Chain ch : getChainSet()){
-                    if(ch.getMentionSet().contains(m1))
-                        ch1 = ch;
-                    else if(ch.getMentionSet().contains(m2))
-                        ch2 = ch;
-                }
-                if(ch1 != null && ch2 != null){
-                    Chunk subj2 = c2.getSubjectOf(m2);
-                    if(subj2 != null){
-                        for(Mention mPrime : ch2.getMentionSet()){
-                            if(mPrime.getCaptionIdx() == c2.getIdx())
-                                if(subj2.equals(c2.getObjectOf(mPrime)))
-                                    m2_subj_m1_obj = true;
-                        }
-                    }
-                }
-            }
-            */
-
-
-            //For each box in boxes_1, if we can find a box in
-            //boxes_2 for which the IOU exceeds 0.75, this is a subset
-            //relation
-            /*
-            if(boxes_1.size() < boxes_2.size()){
-                boolean missingBox = false;
-                for(BoundingBox b1 : boxes_1){
-                    boolean foundBox = false;
-                    for(BoundingBox b2 : boxes_2){
-                        if(BoundingBox.IOU(b1, b2) >= 0.75)
-                            foundBox = true;
-                    }
-                    if(!foundBox)
-                        missingBox = true;
-                }
-                if(!missingBox)
-                    return 2;
-            }*/
-
-            //if(m2_coll && !m1_coll && !m2_subj_m1_obj){
-            if(m2_coll && !m1_coll){
-                //only consider subsets between m1 and m2 where
-                //  a) m2 is collective
-                //  b) m1 is _not_ collective
-                //  c) the [m2 verb m1] relationship does not hold
-                Area a2 = new Area();
-                boxes_2.forEach(b -> a2.add(new Area(b.getRec())));
-                boolean fullCoverage = true;
-                for(BoundingBox b1 : boxes_1)
-                    if(!a2.contains(b1.getRec()))
-                        fullCoverage = false;
-                if(fullCoverage)
-                    return 3;
-            }
-        }
-
-        return 0;
-    }
-
     /**Returns the key-value string for this mention pair,
      * where order is determined by mention precedence (cap:i;mention:j
      * always appears before cap:m;mention:n, where i<=m and j<=n)
@@ -785,6 +847,7 @@ public class Document
     {
         return getMentionPairStr(m, mPrime, includeDocID, false);
     }
+
 
     /**Returns a list of strings representing the given Document -- treating
      * the given chainSet as the source of coreferent information -- in the

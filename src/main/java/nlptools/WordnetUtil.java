@@ -75,8 +75,8 @@ public class WordnetUtil
                     IWord word = wordnetDict.getWord(wordID);
                     int tagCount = wordnetDict.getSenseEntry(word.getSenseKey()).getTagCount();
                     ISynset synset = word.getSynset();
-                    tree.addChild(synset, null, tagCount);
-                    buildHypernymTree(synset, tree);
+                    HypTree.HypNode node = tree.addChild(synset, null, tagCount);
+                    buildHypernymTree(synset, node, tree);
                 }
             }
         }
@@ -91,15 +91,15 @@ public class WordnetUtil
      * @param synset - The current synset (for which hypernyms are produced)
      * @param tree   - The tree to build
      */
-    private void buildHypernymTree(ISynset synset, HypTree tree)
+    private void buildHypernymTree(ISynset synset, HypTree.HypNode lastNode, HypTree tree)
     {
         //Add the hypernyms of this synset to the tree and recurse
         for(ISynsetID hypID : synset.getRelatedSynsets(Pointer.HYPERNYM)){
             ISynset hypSyn = wordnetDict.getSynset(hypID);
             IWord hypWord = hypSyn.getWords().get(0);
             int tagCount = wordnetDict.getSenseEntry(hypWord.getSenseKey()).getTagCount();
-            tree.addChild(hypSyn, synset, tagCount);
-            buildHypernymTree(hypSyn, tree);
+            HypTree.HypNode node = tree.addChild(hypSyn, lastNode, tagCount);
+            buildHypernymTree(hypSyn, node, tree);
         }
     }
 }

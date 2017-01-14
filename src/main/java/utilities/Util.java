@@ -159,58 +159,6 @@ public class Util
         return dateFormat.format(calendar.getTime());
     }
 
-    /**Returns the count value in the given text, such that the text
-     * "twenty-two" will return 22
-     *
-     * @param text
-     * @return
-     */
-    public static Integer getNumeralValue(String text)
-    {
-        //we want to add all numeral words in the mention together,
-        //under the assumption that "twenty two" and "twenty-two" should
-        //both map to 22. For actual numeral values though (7-10), we want to
-        //return the midpoint of the range
-        String[] textArr = text.split("-| ");
-        Integer countValue = 0;
-        for(String word : textArr) {
-            StringUtil.hasAlphaNum(word);
-            Integer i = parseInt(word);
-            if(i != null)
-                countValue += i;
-        }
-
-        //if we didn't find a value, return null
-        if(countValue < 1)
-            return null;
-        else
-            return countValue;
-    }
-
-    /**Tries to parse an int from <b>s</b>, extending the
-     * Integer.parseInt() functionality to recognize
-     * numerals (ie. "two") as integers
-     *
-     * @param s - string to parse
-     * @return  - int for <b>s</b> (null if <b>s</b> isn't a number)
-     */
-    public static Integer parseInt(String s)
-    {
-        Integer i = null;
-        if(s != null && !s.isEmpty())
-        {
-            s = s.toLowerCase().trim();
-            try {//parse digits
-                i = Integer.parseInt(s);
-            } catch(Exception ex) {
-                //parsing digits failed, so try finding the numeral
-                //in the dict (returning null if it isn't present)
-                i = numeralDict.get(s);
-            }
-        }
-        return i;
-    }
-
     /**Tries to parse a boolean from <b>s</b>, extending
      * the Boolean.parseBoolean() functionality to
      * recognize 0 and 1 as booleans
@@ -236,6 +184,29 @@ public class Util
             }
         }
         return b;
+    }
+
+    /**Tries to parse an int from <b>s</b>, extending the
+     * Integer.parseInt() functionality to recognize
+     * numerals (ie. "two") as integers
+     *
+     * @param s - string to parse
+     * @return  - int for <b>s</b> (null if <b>s</b> isn't a number)
+     */
+    public static Integer parseInt(String s)
+    {
+        Integer i = null;
+        if(s != null && !s.isEmpty()) {
+            s = s.toLowerCase().trim();
+            try {//parse digits
+                i = Integer.parseInt(s);
+            } catch(Exception ex) {
+                //parsing digits failed, so try finding the numeral
+                //in the dict (returning null if it isn't present)
+                i = numeralDict.get(s);
+            }
+        }
+        return i;
     }
 
     /**Casts given object as a string
@@ -497,5 +468,30 @@ public class Util
                 result.set(j, result.get(j) * vec.get(j));
         }
         return result;
+    }
+
+    /**Searches the given collection of arrays for a given array,
+     * where the elements of the arrays are compared rather than the
+     * default contains operation, which only compares the array pointers
+     * themselves
+     *
+     * @param coll
+     * @param arr
+     * @param <T>
+     * @return
+     */
+    public static <T> boolean containsArr(Collection<T[]> coll, T[] arr)
+    {
+        for(T[] elem : coll){
+            if(arr.length != elem.length)
+                continue;
+            boolean foundAllElem = true;
+            for(int i=0; i<elem.length; i++)
+                if(!arr[i].equals(elem[i]))
+                    foundAllElem = false;
+            if(foundAllElem)
+                return true;
+        }
+        return false;
     }
 }

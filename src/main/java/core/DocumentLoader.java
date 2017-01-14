@@ -1,14 +1,10 @@
 package core;
 
 import nlptools.DependencyParser;
-import nlptools.WordnetUtil;
 import structures.*;
 import utilities.*;
 
 import javax.sql.rowset.CachedRowSet;
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
 import java.util.*;
 
 /**DocumentLoader houses static functions to load Document
@@ -17,53 +13,17 @@ import java.util.*;
  */
 public class DocumentLoader
 {
+
     public static void main(String[] args)
     {
-        WordnetUtil wnUtil =
-                new WordnetUtil("/Users/syphonnihil/source/data/WordNet-3.0/dict");
+        /*
+        String[][] table = {{"", "n|n", "n|p", "c|n", "b|n", "b|p", "b|b", "c|c"},
+                            {"nn", "319836 (97.9%)", "11 (0.0%)", "9 (0.0%)", "0 (0.0%)", "1940 (0.6%)", "1 (0.0%)", "4797 (1.5%)"},
+                {"cc", "8673 (15.0%)", "2 (0.0%)", "15 (0.0%)", "2 (0.0%)", "246 (0.4%)", "0 (0.0%)", "49048 (84.6%)"},
+                {"bp", "4699 (47.3%)", "5 (0.1%)","3 (0.0%)","2 (0.0%)","4504 (45.3%)","0 (0.0%)","723 (7.3%)"}};
+        System.out.println(StringUtil.toTableStr(table));
+        */
 
-
-        String[] headArr = {"sunglass", "hand", "room", "woman",
-                "top", "shorts", "picture", "worker", "glass",
-                "jacket", "day", "water", "grass", "stage", "baby",
-                "dog", "ball", "microphone", "suit", "who", "game",
-                "food", "he", "it", "pants", "that", "head", "them",
-                "dress", "area", "lady", "t-shirt", "guy", "wall",
-                "hat", "chair", "him", "something", "face", "guitar",
-                "bench", "bicycle", "pool", "jeans", "street", "crowd",
-                "side", "sign", "kid", "person", "player", "bike", "car",
-                "park", "beach", "field", "man", "background", "sidewalk",
-                "girl", "shirt", "camera", "coat", "one", "ground",
-                "child", "there", "snow", "helmet", "tree", "people",
-                "uniform", "building", "couple", "other", "air", "boat",
-                "arm", "bag", "table", "boy", "horse", "road", "rock", "hair"};
-
-        for(int i=0; i<headArr.length; i++){
-            HypTree hypTree = wnUtil.getHypernymTree(headArr[i]);
-            for(List<HypTree.HypNode> branch : hypTree.getRootBranches())
-                System.out.println(StringUtil.listToString(branch, " | "));
-            //hypTree.prettyPrint();
-
-            System.out.println("Continue (" + i + ")?");
-            char c = ' ';
-            BufferedReader br =
-                    new BufferedReader(new InputStreamReader(System.in));
-            try{
-                String line = br.readLine();
-                if(line.length() == 1)
-                    c = line.toCharArray()[0];
-                while(c != 'y' && c != 'Y' && c != 'n' && c != 'N'){
-                    System.out.print("y or n, please: ");
-                    line = br.readLine();
-                    if(line.length() == 1)
-                        c = line.toCharArray()[0];
-                }
-            } catch (IOException ioEx) {
-                Logger.log(ioEx);
-            }
-            if(c == 'n' || c == 'N')
-                System.exit(0);
-        }
     }
 
     /**Returns a set of Documents, based on a .coref file
@@ -78,7 +38,7 @@ public class DocumentLoader
     {
         List<String> corefList = FileIO.readFile_lineList(corefFile);
         Mention.initLexiconDict(lexiconDir);
-        Mention.initWordLists(wordListDir);
+        Cardinality.initCardLists(wordListDir + "/collectiveNouns.txt");
         Caption.initLemmatizer();
 
         Map<String, Set<String>> corefDict = new HashMap<>();
@@ -106,7 +66,7 @@ public class DocumentLoader
      */
     public static Collection<Document> getDocumentSet(String flickr30kEntitiesDir, String wordListDir)
     {
-        Mention.initWordLists(wordListDir);
+        Cardinality.initCardLists(wordListDir + "/collectiveNouns.txt");
 
         //get the filenames from the sentences directory (assuming the annotations are the same)
         Set<String> filenames =
@@ -333,6 +293,193 @@ public class DocumentLoader
                         "dependency.relation FROM dependency JOIN image "+
                         "ON dependency.img_id=image.img_id WHERE cross_val="+crossVal;
             }
+            Map<String, Map<Integer, Set<String>>> depDict = new HashMap<>();
+            rs = conn.query(query);
+            while(rs.next()){
+                String imgID = rs.getString("img_id");
+                int captionIdx = rs.getInt("caption_idx");
+                int govTokenIdx = rs.getInt("gov_token_idx");
+                int depTokenIdx = rs.getInt("dep_token_idx");
+                String relation = rs.getString("relation");
+                if(!depDict.containsKey(imgID))
+                    depDict.put(imgID, new HashMap<>());
+                if(!depDict.get(imgID).containsKey(captionIdx))
+                    depDict.get(imgID).put(captionIdx, new HashSet<>());
+                depDict.get(imgID).get(captionIdx).add(govTokenIdx +
+                        "|" + relation + "|" + depTokenIdx);
+            }
+            for(String imgID : depDict.keySet())
+                for(Integer capIdx : depDict.get(imgID).keySet())
+                    docDict.get(imgID).getCaption(capIdx).setRootNode(depDict.get(imgID).get(capIdx));
+
+        } catch(Exception ex) {
+            Logger.log(ex);
+        }
+        Logger.log("Document loading complete");
+        return new HashSet<>(docDict.values());
+    }
+
+    /**For debugging use only; returns a random set of numDocs Documents from the
+     * specified database with the given crossVal flag.
+     *
+     * @param crossVal
+     * @param numDocs
+     * @return
+     */
+    public static Collection<Document> getDocumentSet(DBConnector conn, int crossVal, int numDocs)
+    {
+        CachedRowSet rs;
+        String query;
+        Map<String, Document> docDict = new HashMap<>();
+        numDocs = Math.max(0, numDocs);
+
+        try{
+            Logger.log("Initializing Documents from <image>");
+            if(crossVal < 0){
+                query = "SELECT img_id, height, width, "+
+                        "cross_val, reviewed FROM image";
+            } else {
+                query = "SELECT img_id, height, width, "+
+                        "cross_val, reviewed FROM image "+
+                        "WHERE cross_val=" +
+                        crossVal;
+            }
+            query += " ORDER BY RAND() LIMIT " + numDocs;
+            rs = conn.query(query);
+            Set<String> imgIDs = new HashSet<>();
+            while(rs.next()){
+                String imgID = rs.getString("img_id");
+                imgIDs.add("'" + imgID + "'");
+                Document d = new Document(imgID);
+                d.height = rs.getInt("height");
+                d.width = rs.getInt("width");
+                d.crossVal = rs.getInt("cross_val");
+                d.reviewed = rs.getBoolean("reviewed");
+                docDict.put(d.getID(), d);
+            }
+            String imgIdStr = "(" + StringUtil.listToString(imgIDs, ",") + ")";
+
+            Logger.log("Building Tokens and Captions from <token>");
+            query = "SELECT img_id, caption_idx, token_idx, " +
+                    "token, lemma, pos_tag FROM token "+
+                    "WHERE img_id IN " + imgIdStr;
+            rs = conn.query(query);
+            while(rs.next()){
+                String imgID = rs.getString("img_id");
+                int captionIdx = rs.getInt("caption_idx");
+                int tokenIdx = rs.getInt("token_idx");
+                String text = rs.getString("token");
+                String lemma = rs.getString("lemma");
+                String posTag = rs.getString("pos_tag");
+                Token t = new Token(imgID, captionIdx, tokenIdx,
+                        text, lemma, posTag);
+
+                //Add a new caption to this document, if this index
+                //doesn't already exist; add the Token to this caption
+                Caption c = docDict.get(imgID).getCaption(captionIdx);
+                if(c == null){
+                    c = new Caption(imgID, captionIdx);
+                    docDict.get(imgID).addCaption(c);
+                }
+                c.addToken(t);
+            }
+
+            Logger.log("Partitioning Tokens into Chunks with <chunk>");
+            query = "SELECT img_id, caption_idx, chunk_idx, " +
+                    "start_token_idx, end_token_idx, chunk_type "+
+                    "FROM chunk WHERE img_id IN " + imgIdStr;
+            rs = conn.query(query);
+            while(rs.next()){
+                String imgID = rs.getString("img_id");
+                int captionIdx = rs.getInt("caption_idx");
+                int chunkIdx = rs.getInt("chunk_idx");
+                int startTokenIdx = rs.getInt("start_token_idx");
+                int endTokenIdx = rs.getInt("end_token_idx");
+                String chunkType = rs.getString("chunk_type");
+                docDict.get(imgID).getCaption(captionIdx).addChunk(chunkIdx,
+                        chunkType, startTokenIdx, endTokenIdx);
+            }
+
+            Logger.log("Loading bounding boxes from <box>");
+            query = "SELECT img_id, box_id, x_min, y_min, " +
+                    "x_max, y_max FROM box " +
+                    "WHERE img_id IN " + imgIdStr;
+            Map<String, Map<Integer, BoundingBox>> boxDict = new HashMap<>();
+            rs = conn.query(query);
+            while(rs.next()){
+                String imgID = rs.getString("img_id");
+                int boxID = rs.getInt("box_id");
+                int xMin = rs.getInt("x_min");
+                int yMin = rs.getInt("y_min");
+                int xMax = rs.getInt("x_max");
+                int yMax = rs.getInt("y_max");
+                if(!boxDict.containsKey(imgID))
+                    boxDict.put(imgID, new HashMap<>());
+                boxDict.get(imgID).put(boxID,
+                        new BoundingBox(imgID, boxID, xMin, yMin, xMax, yMax));
+            }
+
+            Logger.log("Loading chains from <chain> and associating them with "+
+                    "the bounding boxes from the previous step");
+            query = "SELECT img_id, chain_id, assoc_box_ids, " +
+                    "is_scene, is_orig_nobox FROM chain "+
+                    "WHERE img_id IN " + imgIdStr;
+            rs = conn.query(query);
+            while(rs.next()){
+                String imgID = rs.getString("img_id");
+                String chainID = rs.getString("chain_id");
+                boolean isScene = rs.getBoolean("is_scene");
+                boolean isOrigNobox = rs.getBoolean("is_orig_nobox");
+                String assocBoxIDs = rs.getString("assoc_box_ids");
+                Chain c = new Chain(imgID, chainID);
+                c.isScene = isScene;
+                c.isOrigNobox = isOrigNobox;
+                if(assocBoxIDs != null){
+                    for(String assocBox : assocBoxIDs.split("\\|")){
+                        Integer boxID = Integer.parseInt(assocBox);
+                        if(boxDict.get(imgID).containsKey(boxID))
+                            c.addBoundingBox(boxDict.get(imgID).get(boxID));
+                    }
+                }
+                docDict.get(imgID).addChain(c);
+            }
+
+            //add chain 0 to all documents
+            for(Document d : docDict.values())
+                d.addChain(new Chain(d.getID(), "0"));
+
+            Logger.log("Partitioning Tokens into Mentions with <mention>");
+            query = "SELECT img_id, caption_idx, mention_idx, " +
+                    "start_token_idx, end_token_idx, card_str, " +
+                    "chain_id, lexical_type FROM mention " +
+                    "WHERE img_id IN " + imgIdStr;
+            rs = conn.query(query);
+            while(rs.next()){
+                String imgID = rs.getString("img_id");
+                int captionIdx = rs.getInt("caption_idx");
+                int mentionIdx = rs.getInt("mention_idx");
+                int startTokenIdx = rs.getInt("start_token_idx");
+                int endTokenIdx = rs.getInt("end_token_idx");
+                String cardStr = rs.getString("card_str");
+                Cardinality card = null;
+                try{
+                    if(cardStr != null)
+                        card = new Cardinality(cardStr);
+                }catch(Exception ex){
+                    Logger.log(ex);
+                }
+                String chainID = rs.getString("chain_id");
+                String lexicalType = rs.getString("lexical_type");
+
+                Mention m = docDict.get(imgID).getCaption(captionIdx).addMention(mentionIdx,
+                        lexicalType, chainID, card, startTokenIdx, endTokenIdx);
+                docDict.get(imgID).addMentionToChain(m);
+            }
+
+            Logger.log("Reading dependency trees from <dependency>");
+            query = "SELECT img_id, caption_idx, gov_token_idx, " +
+                    "dep_token_idx, relation FROM dependency " +
+                    "WHERE img_id IN " + imgIdStr;
             Map<String, Map<Integer, Set<String>>> depDict = new HashMap<>();
             rs = conn.query(query);
             while(rs.next()){

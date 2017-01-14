@@ -5,9 +5,7 @@ import structures.Chain;
 import structures.Document;
 import structures.Mention;
 
-import java.util.Collection;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 /**HtmlIO houses static html file IO functions, generally for
  * writing Documents as web pages
@@ -16,13 +14,18 @@ import java.util.Set;
  */
 public class HtmlIO
 {
-    private static final String imgSrcRoot =
+    private static final String _imgSrcRoot =
             "http://shannon.cs.illinois.edu/DenotationGraph/graph/flickr30k-images/";
+    private static final String[] _colors = {"red", "blue", "green",
+            "darkorchid", "teal", "saddlebrown", "mediumvioletred",
+            "darkkhaki", "darkslategray", "darkolivegreen", "olivedrab",
+            "chocolate"};
+
 
     public static String getImgHtm(Document d)
     {
         //get the image source
-        String imgSrc = imgSrcRoot + d.getID();
+        String imgSrc = _imgSrcRoot + d.getID();
 
         //build the row, enclosing it in a table
         //so as not to throw off any formatting
@@ -35,15 +38,20 @@ public class HtmlIO
         sb.append("</em>");
         sb.append("</td>");
         sb.append("<td>");
-        sb.append(getColorCodedCaptions(d, d.getChainSet()));
+        sb.append(_getColorCodedCaptions(d, _getChainColors(d.getChainSet())));
         sb.append("</td></tr></table></td>");
         return sb.toString();
     }
 
     public static String getImgHtm(Document d, Set<Chain> predChainSet)
     {
+        return getImgHtm(d, predChainSet, null);
+    }
+
+    public static String getImgHtm(Document d, Set<Chain> predChainSet, Set<Chain[]> subsetPairs)
+    {
         //get the image source
-        String imgSrc = imgSrcRoot + d.getID() + ".jpg";
+        String imgSrc = _imgSrcRoot + d.getID();
 
         //build the row, enclosing it in a table
         //so as not to throw off any formatting
@@ -58,15 +66,28 @@ public class HtmlIO
         sb.append("<td>");
         sb.append("<p>");
         sb.append("<h4>Gold</h4>");
-        sb.append(getColorCodedCaptions(d, d.getChainSet()));
+        Map<Chain, String> chainColors_gold = _getChainColors(d.getChainSet());
+        sb.append(_getColorCodedCaptions(d, chainColors_gold));
         sb.append("</p>");
         sb.append("<p>");
         sb.append("<h4>Predicted</h4>");
-        sb.append(getColorCodedCaptions(d, predChainSet));
+        Map<Chain, String> chainColors_pred = _getChainColors(predChainSet);
+        sb.append(_getColorCodedCaptions(d, chainColors_pred));
         sb.append("</p>");
-        sb.append("</td></tr></table></td>");
+        sb.append("</td></tr>");
+        if(subsetPairs != null){
+            sb.append("<tr><td>");
+            sb.append("<h4>Gold</h4>");
+            sb.append(_getColorCodedSubsetList(d.getSubsetChains(), chainColors_gold));
+            sb.append("<h4>Predicted</h4>");
+            sb.append(_getColorCodedSubsetList(subsetPairs, chainColors_pred));
+            sb.append("</td></tr>");
+        }
+        sb.append("</table></td>");
         return sb.toString();
     }
+
+
 
     public static String getMultiImgPage(Collection<Document> docList)
     {
@@ -81,128 +102,6 @@ public class HtmlIO
         pageBuilder.append("</table></body></html>");
         return pageBuilder.toString();
     }
-
-    /*
-    public static String getCorefImgPage(Document d, Set<Chain> predChainSet,
-                                         List<String> debugLineList, Score score,
-                                         String imgID_prev, String imgID_next)
-    {
-        //put everything together, in the form
-        //  ----------------
-        //  |        img   |    gold captions
-        //  |              |    pred captions
-        //  ----------------
-        //  [prevBtn] [nextBtn]
-        //  ________________________________________
-        //  |   Stats            | Mismatched Links |
-        //  |____________________|__________________|
-        //  | CoreferenceUtil Log     | Singleton Debug  |
-        //  |____________________|__________________|
-        //
-        //  (table boundaries shown for clarity)
-        StringBuilder pageBuilder = new StringBuilder();
-        pageBuilder.append("<html><body><table>");
-
-        //The image row contains the image and gold/predicted chains
-        pageBuilder.append("<tr>");
-        pageBuilder.append(getImgHtm(d, predChainSet));
-        pageBuilder.append("</tr>");
-
-        //The button row contains the buttons, off to the left hand side
-        pageBuilder.append("<tr>");
-        pageBuilder.append("<td><table><tr><td width=50%>");
-        pageBuilder.append("<form style=\"display:inline;width=50px;height=50px\"");
-        pageBuilder.append("action=\"http://web.engr.illinois.edu/~ccervan2/coref/chain/");
-        pageBuilder.append(imgID_prev);
-        pageBuilder.append(".htm\"><input type=\"submit\" value=\"Previous\"></form>");
-        pageBuilder.append("<form style=\"display:inline;width=50px;height=50px\"");
-        pageBuilder.append("action=\"http://web.engr.illinois.edu/~ccervan2/coref/chain/");
-        pageBuilder.append(imgID_next);
-        pageBuilder.append(".htm\"><input type=\"submit\" value=\"Next\"></form>");
-        pageBuilder.append("</td><td width=50%></td></tr></table></td>");
-        pageBuilder.append("</tr>");
-
-        //the next row will contain our score table. The exact information
-        //included in which will differ based on the score type
-        pageBuilder.append("<tr><td>");
-        pageBuilder.append(getScoreTable(score));
-        pageBuilder.append("</td></tr>");
-
-        //The next row shows our debug output, split into
-        //classifier logs (on the left) and singleton debug logs (on
-        //the right). The split allows us to more directly view why
-        //the singleton chains weren't put into larger chains
-        //put our debug output into a single string
-        StringBuilder debugBuilder_1 = new StringBuilder();
-        StringBuilder debugBuilder_2 = new StringBuilder();
-        debugBuilder_1.append("<h4>CoreferenceUtil Log</h4>");
-        debugBuilder_2.append("<h4>Singleton Debug</h4>");
-        boolean switchDebug = false;
-        if(debugLineList != null){
-            for(String line : debugLineList) {
-                if(line.contains("Confidence with which"))
-                    switchDebug = true;
-                if(switchDebug) {
-                    debugBuilder_2.append(line);
-                    debugBuilder_2.append("<br/>");
-                } else {
-                    debugBuilder_1.append(line);
-                    debugBuilder_1.append("<br/>");
-                }
-            }
-        }
-        pageBuilder.append("<tr><td><table><tr>");
-        pageBuilder.append("<td width=50% valign=\"top\">");
-        pageBuilder.append(debugBuilder_1);
-        pageBuilder.append("</td>");
-        pageBuilder.append("<td width=50% valign=\"top\">");
-        pageBuilder.append(debugBuilder_2);
-        pageBuilder.append("</td>");
-        pageBuilder.append("</tr></table></td></tr>");
-
-        pageBuilder.append("</table></body></html>");
-        return pageBuilder.toString();
-    }*/
-
-    /*
-    private static StringBuilder getScoreTable(Score score)
-    {
-        StringBuilder tableBuilder = new StringBuilder();
-        tableBuilder.append("<table><tr>");
-        if(score.getType() == Score.ScoreType.BCUBED){
-            BCubed bcubScore = (BCubed)score;
-            tableBuilder.append("<td>");
-            tableBuilder.append(String.format("B<sup>3</sup> Accuracy<br/>"+
-                            "<div style=\"padding-left:2em\">%s</div>",
-                    bcubScore.getScoreString()));
-            tableBuilder.append("</td>");
-        } else if(score.getType() == Score.ScoreType.BLANC){
-            Blanc blancScore = (Blanc)score;
-
-            //this column displays the overal classifier stats
-            tableBuilder.append("<td width=50% valign=\"top\">");
-            tableBuilder.append(String.format("Total links: %d<br/>"+
-                            "<div style=\"padding-left:2em\">%d positive</div>"+
-                            "<div style=\"padding-left:2em\">%d negative</div>",
-                    blancScore.getNumLinks(), blancScore.getNumPosLinks(),
-                    blancScore.getNumNegLinks()));
-            tableBuilder.append(String.format("BLANC Accuracy<br/>"+
-                            "<div style=\"padding-left:2em\">Pos: %s</div>"+
-                            "<div style=\"padding-left:2em\">Neg: %s</div>"+
-                            "<div style=\"padding-left:2em\">Ttl: %s</div>",
-                    blancScore.getScoreString_pos(), blancScore.getScoreString_neg(),
-                    blancScore.getScoreString_total()));
-            tableBuilder.append("<br/><br/><br/>");
-            tableBuilder.append("<em>Added Links: negative in gold, positive in predicted</em><br/>");
-            tableBuilder.append("<em>Removed Links: positive in gold, negative in predicted</em><br/>");
-            tableBuilder.append("<em>Totals based on merged gold</em>");
-            tableBuilder.append("</td>");
-        }
-        tableBuilder.append("</tr></table>");
-        return tableBuilder;
-    }
-    */
-
 
     private static StringBuilder
     getLinkMismatchTableRows(Set<String[]> mentionPairSet)
@@ -222,26 +121,110 @@ public class HtmlIO
         return sb;
     }
 
+    /**Returns the string for an html unordered list of subset pairs,
+     * where each list item is
+     * {m, m, m} sub {m, m, m}
+     * corresponding to the given subset pairs
+     *
+     * @param subsetPairs
+     * @param chainColors
+     * @return
+     */
+    private static String _getColorCodedSubsetList(Set<Chain[]> subsetPairs, Map<Chain, String> chainColors)
+    {
+        StringBuilder sb = new StringBuilder();
+        sb.append("<ul>");
+        for(Chain[] subsetPair : subsetPairs) {
+            Chain sub = subsetPair[0], sup = subsetPair[1];
+            sb.append("<li>");
+
+            //Sub mentions
+            sb.append("<span style=\"color:");
+            sb.append(chainColors.get(sub));
+            sb.append(";\">");
+            sb.append("&#123;");
+            List<Mention> subMentions = new ArrayList<>(sub.getMentionSet());
+            for(int i=0; i<subMentions.size(); i++){
+                sb.append("[");
+                sb.append(StringUtil.toWebSafeStr(subMentions.get(i).toString()));
+                sb.append("]");
+                if(i < subMentions.size()-1)
+                    sb.append(", ");
+            }
+            sb.append("&#125;");
+            sb.append("<sub>");
+            String subID = sub.getID().substring(Math.max(0,
+                    sub.getID().length() - 5), sub.getID().length());
+            sb.append(subID);
+            sb.append("</sub>");
+            sb.append("</span>");
+
+            //Subset
+            sb.append(" &#8834; ");
+
+            //Sup mentions
+            sb.append("<span style=\"color:");
+            sb.append(chainColors.get(sup));
+            sb.append(";\">");
+            sb.append("&#123;");
+            List<Mention> supMentions = new ArrayList<>(sup.getMentionSet());
+            for(int i=0; i<supMentions.size(); i++){
+                sb.append("[");
+                sb.append(StringUtil.toWebSafeStr(supMentions.get(i).toString()));
+                sb.append("]");
+                if(i < supMentions.size()-1)
+                    sb.append(", ");
+            }
+            sb.append("&#125;");
+            sb.append("<sub>");
+            String supID = sup.getID().substring(Math.max(0,
+                    sup.getID().length() - 5), sup.getID().length());
+            sb.append(supID);
+            sb.append("</sub>");
+            sb.append("</span>");
+
+
+            sb.append("</li>");
+        }
+        sb.append("</ul>");
+        return sb.toString();
+    }
+
+    /**Returns a mapping of the given chains to
+     * colors, such that chain 0 is always black,
+     * chains up to the twelfth are according to
+     * our set colors, and each chain beyond this
+     * is assigned a random color
+     *
+     * @param chainSet
+     * @return
+     */
+    private static Map<Chain, String> _getChainColors(Set<Chain> chainSet)
+    {
+        Map<Chain, String> colorDict = new HashMap<>();
+        int colorIdx = 0;
+        for(Chain c : chainSet){
+            String color = "black";
+            if(!c.getID().equals("0")) {
+                color = "#" + Integer.toHexString((int)(Math.random()*16777215));
+                if(colorIdx < _colors.length)
+                    color = _colors[colorIdx++];
+            }
+            colorDict.put(c, color);
+        }
+        return colorDict;
+    }
+
     /**Given a Document, <b>d</b>, returns the captions
      * as an html block, color coded to correspond with
-     * the chain assignments.
-     * NOTE: also requires a chain dict, since we want both
-     *       the captions (which don't vary based on our assignments)
-     *       and the colors (which do
+     * the given chain assignments
      *
+     * @param d
+     * @param chainColorDict
      * @return 			- The HTML for the color-coded captions
      */
-    private static String getColorCodedCaptions(Document d, Set<Chain> chainSet)
+    private static String _getColorCodedCaptions(Document d, Map<Chain, String> chainColorDict)
     {
-        //we'll need a list of colors so we can color code
-        //our chains
-        String[] colorArr = {"red", "blue", "green", "darkorchid",
-                "teal", "saddlebrown",
-                "mediumvioletred", "darkkhaki",
-                "darkslategray", "darkolivegreen",
-                "olivedrab", "chocolate"};
-        int colorIndex = 0;
-
         //get span tagged strings for each caption
         StringBuilder captionBuilder = new StringBuilder();
         captionBuilder.append("<ul>");
@@ -255,8 +238,7 @@ public class HtmlIO
 
         //iterate through the chains, replacing mentions' IDs with
         //the ID+formatting
-        for(Chain c : chainSet) {
-            boolean isSingletonChain = c.getMentionSet().size() == 1;
+        for(Chain c : chainColorDict.keySet()) {
             for(Mention m : c.getMentionSet()) {
                 int index = captionBuilder.indexOf(m.getUniqueID());
                 if(index > -1) {
@@ -266,8 +248,7 @@ public class HtmlIO
                     //insert some formatting. Bold for all mentions,
                     //a color for non-singleton chains
                     String spanFormat = " style=\"font-weight:bold;";
-                    if(!isSingletonChain)
-                        spanFormat += "color:" + colorArr[colorIndex] + ";";
+                    spanFormat += "color:" + chainColorDict.get(c) + ";";
                     spanFormat += "\"";
                     captionBuilder.insert(index, spanFormat);
 
@@ -280,10 +261,6 @@ public class HtmlIO
                     captionBuilder.insert(index, "<sub>"+chainID+"</sub>");
                 }
             }
-
-            //if this was a multi-phrase chain, increment the color
-            if(!isSingletonChain)
-                colorIndex++;
         }
 
         return captionBuilder.toString();

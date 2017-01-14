@@ -164,6 +164,122 @@ public class StringUtil {
         return listToString(Arrays.asList(coll), delimiter);
     }
 
+    /**Returns the given list of lists as a formatted table
+     * string, where each column is 1 space larger than the largest
+     * cell's string (for that column). Tables are formatted as
+     *
+     *     | col  col  col
+     * ---------------------
+     * row | cell cell cell
+     * row | cell cell cell
+     *
+     * @param table
+     * @return
+     */
+    public static String toTableStr(List<List<String>> table)
+    {
+        String[][] tableArr = new String[table.size()][];
+        for(int i=0; i<table.size(); i++)
+            tableArr[i] = table.get(i).toArray(new String[]{});
+        return toTableStr(tableArr);
+    }
+
+    /**Returns the given 2d array as a formatted table string,
+     * where each column is 1 space larger than the largest
+     * cell's string (for that column). Tables are formatted as
+     *
+     *     | col  col  col
+     * ---------------------
+     * row | cell cell cell
+     * row | cell cell cell
+     *
+     * @param table
+     * @return
+     */
+    public static String toTableStr(String[][] table)
+    {
+        //Set up our formatting string using an
+        //array of column widths, such that the
+        //column width for column j will be one
+        //greater than the longest ij string,
+        //for all i
+        int numRows = table.length;
+        int numCols = 0;
+        for(int i=0; i<numRows; i++)
+            if(table[i].length > numCols)
+                numCols = table[i].length;
+        int[] colWidths = new int[numCols];
+        for(int i=0; i<numRows; i++)
+            for(int j=0; j<numCols; j++)
+                if(j < table[i].length)
+                    if(table[i][j].length() > colWidths[j])
+                        colWidths[j] = table[i][j].length();
+        String formatStr = "%-" + (colWidths[0]+1) + "s | ";
+        for(int i=1; i<numCols; i++)
+            formatStr += "%-" + (colWidths[i]+1) + "s ";
+        formatStr += "\n";
+
+        //Create the table string and return
+        StringBuilder sb = new StringBuilder();
+        String[] colHeaders = new String[numCols];
+        for(int col=0; col<numCols; col++){
+            if(col < table[0].length)
+                colHeaders[col] = table[0][col];
+            else
+                colHeaders[col] = "";
+        }
+        sb.append(String.format(formatStr, (Object[])colHeaders));
+        for(int i=0; i<numCols; i++){
+            for(int j=0; j < colWidths[i] + 2; j++)
+                sb.append("-");
+            if(i == 0) //first coumn has pipe and extra space
+                sb.append("|-");
+        }
+        sb.append("\n");
+        for(int r=1; r<numRows; r++){
+            String[] row = new String[numCols];
+            for(int c=0; c<numCols; c++){
+                if(c < table[r].length)
+                    row[c] = table[r][c];
+                else
+                    row[c] = "";
+            }
+            sb.append(String.format(formatStr, (Object[])row));
+        }
+        return sb.toString();
+    }
+
+    /**Converts the given string to a websafe version,
+     * replacing special characters with their escape codes
+     *
+     * @param s
+     * @return
+     */
+    public static String toWebSafeStr(String s)
+    {
+        //Strip out the special chars
+        String websafe = s.replace("\"", "[QUOTE]");
+        websafe = websafe.replace("'", "[APPOS]");
+        websafe = websafe.replace("&", "[AMPRS]");
+        websafe = websafe.replace("<", "[LESS]");
+        websafe = websafe.replace(">", "[GRTR]");
+        websafe = websafe.replace(";", "[SEMI]");
+        websafe = websafe.replace(":", "[COLON]");
+        websafe = websafe.replace("#", "[HASH]");
+
+        //Replace them with their web equivalents
+        websafe = websafe.replace("[QUOTE]", "&#34;");
+        websafe = websafe.replace("[APPOS]", "&#39;");
+        websafe = websafe.replace("[AMPRS]", "&#38;");
+        websafe = websafe.replace("[LESS]", "&#60;");
+        websafe = websafe.replace("[GRTR]", "&#62;");
+        websafe = websafe.replace("[SEMI]", "&#59;");
+        websafe = websafe.replace("[COLON]", "&#58;");
+        websafe = websafe.replace("[HASH]", "&#35;");
+
+        return websafe;
+    }
+
     /**Returns only the unique strings in the given array
      *
      * @param arr
@@ -228,5 +344,35 @@ public class StringUtil {
             dict.put(kvPair[0], kvPair[1]);
         }
         return dict;
+    }
+
+    /**Returns whether the specified string starts with an element
+     * from the specified collection
+     *
+     * @param coll
+     * @param s
+     * @return
+     */
+    public static boolean startsWithElement(Collection<String> coll, String s)
+    {
+        for(String item : coll)
+            if(s.startsWith(item))
+                return true;
+        return false;
+    }
+
+    /**Return whether the specified string contains one of the
+     * elements from the specified collection
+     *
+     * @param coll
+     * @param s
+     * @return
+     */
+    public static boolean containsElement(Collection<String> coll, String s)
+    {
+        for(String item : coll)
+            if(s.contains(item))
+                return true;
+        return false;
     }
 }

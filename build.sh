@@ -42,6 +42,6 @@ else
     mvn --offline clean package > build.log
 fi
 mvn install > build.log
-mvn deploy > build.log
+#mvn deploy > build.log
 
 grep "^\[ERROR\]" build.log

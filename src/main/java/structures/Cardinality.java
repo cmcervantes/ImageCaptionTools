@@ -184,6 +184,11 @@ public class Cardinality
         _quantifiers_kv.put("some", 2);
     }
 
+    /**Parses the list of tokens and produces a Cardinality
+     *
+     * @param tokens
+     * @return
+     */
     public static Cardinality parseCardinality(List<Token> tokens)
     {
         int setVal, elemVal;
@@ -253,8 +258,6 @@ public class Cardinality
             }
             return new Cardinality(new int[]{setVal, elemVal}, new boolean[]{setUnderdef, elemUnderdef});
         }
-
-
 
         //Determine all list-based facets of this token list
         boolean prefix_article = _articles.contains(first);

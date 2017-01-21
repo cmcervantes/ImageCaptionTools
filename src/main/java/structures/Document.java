@@ -2,7 +2,6 @@ package structures;
 
 import utilities.*;
 
-import javax.print.Doc;
 import java.awt.*;
 import java.util.*;
 import java.util.List;
@@ -594,19 +593,11 @@ public class Document
                             Mention m = c.getMentionList().get(mIdx);
 
                             //Mentions can only be in a subset relation if they
-                            //  a) have matching lexical types
-                            //  b) the latter mention is a pronoun or
-                            //  c) the latter mention is a numeral or
-                            //  d) the latter is some variant of 'other'
-                            boolean mIsNum = false;
-                            try{
-                                Integer.parseInt(m.toString());
-                                mIsNum = true;
-                            } catch(Exception ex){/*Do nothing*/}
+                            //  a) have matching lexical types or
+                            //  b) either mention is pronominal
                             if(Mention.getLexicalTypeMatch(m0, m) > 0 ||
-                                    m0.getPronounType() != Mention.PRONOUN_TYPE.NONE ||
-                                    m.getPronounType() != Mention.PRONOUN_TYPE.NONE ||
-                                    mIsNum || m.getHead().getLemma().equals("other")){
+                               m0.getPronounType() != Mention.PRONOUN_TYPE.NONE ||
+                               m.getPronounType() != Mention.PRONOUN_TYPE.NONE) {
                                 subsetMentions.add(c.getMentionList().get(mIdx));
                             }
                         }

@@ -9,8 +9,7 @@ import utilities.HypTree;
 import utilities.Logger;
 
 import java.io.File;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
 /**The WordnetUtil - unlike everything else
  * currently in the legacy package - is actually
@@ -22,8 +21,22 @@ import java.util.List;
  */
 public class WordnetUtil
 {
+    private static Set<String> _rootHypernyms;
+    static {
+        _rootHypernyms = new HashSet<>();
+        String[] hypArr = {"concept","weather","clothing",
+                "group","person","equipment","location",
+                "animal","body_covering","plant", "substance", "wheeled_vehicle",
+                "abstraction","vehicle","natural_object","artifact",
+                "device","structure","furniture","physical_entity",
+                "body_part","matter", "measure",
+                "cognition", "event", "natural_phenomenon"};
+        _rootHypernyms.addAll(Arrays.asList(hypArr));
+    }
+
     private WordnetStemmer wnStemmer;
     private IRAMDictionary wordnetDict;
+
 
     /**Constructor that creates the WordNet dictionary
      * using a local wordnet directory.
@@ -101,5 +114,29 @@ public class WordnetUtil
             HypTree.HypNode node = tree.addChild(hypSyn, lastNode, tagCount);
             buildHypernymTree(hypSyn, node, tree);
         }
+    }
+
+    /**Returns the bag-of-hypernyms representation of the lemma,
+     * according to the static set of root hypernyms
+     *
+     * @param lemma
+     * @return
+     */
+    public Set<String> getBagOfHypernyms(String lemma)
+    {
+        Set<String> boh = new HashSet<>();
+        HypTree hypTree = getHypernymTree(lemma);
+        for(List<HypTree.HypNode> branch : hypTree.getRootBranches(true)){
+            String leaf = null;
+            for(HypTree.HypNode h : branch){
+                String hStr = h.toString();
+                if(_rootHypernyms.contains(hStr)){
+                    leaf = hStr; break;
+                }
+            }
+            if(leaf != null)
+                boh.add(leaf);
+        }
+        return boh;
     }
 }

@@ -23,7 +23,6 @@ public class DocumentLoader
                 {"bp", "4699 (47.3%)", "5 (0.1%)","3 (0.0%)","2 (0.0%)","4504 (45.3%)","0 (0.0%)","723 (7.3%)"}};
         System.out.println(StringUtil.toTableStr(table));
         */
-
     }
 
     /**Returns a set of Documents, based on a .coref file
@@ -353,7 +352,7 @@ public class DocumentLoader
                 Document d = new Document(imgID);
                 d.height = rs.getInt("height");
                 d.width = rs.getInt("width");
-                d.crossVal = rs.getInt("cross_val");
+                d.crossVal = Util.castInteger(rs.getObject("cross_val"));
                 d.reviewed = rs.getBoolean("reviewed");
                 docDict.put(d.getID(), d);
             }

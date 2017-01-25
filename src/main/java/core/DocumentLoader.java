@@ -121,7 +121,7 @@ public class DocumentLoader
                 Document d = new Document(rs.getString("img_id"));
                 d.height = rs.getInt("height");
                 d.width = rs.getInt("width");
-                d.crossVal = rs.getInt("cross_val");
+                d.crossVal = Util.castInteger(rs.getObject("cross_val"));
                 d.reviewed = rs.getBoolean("reviewed");
                 docDict.put(d.getID(), d);
             }
@@ -329,39 +329,68 @@ public class DocumentLoader
     {
         CachedRowSet rs;
         String query;
-        Map<String, Document> docDict = new HashMap<>();
+        Set<String> imgIDs = new HashSet<>();
         numDocs = Math.max(0, numDocs);
 
+        //First, get random IDs with the given crossVal flag
         try{
-            Logger.log("Initializing Documents from <image>");
             if(crossVal < 0){
-                query = "SELECT img_id, height, width, "+
-                        "cross_val, reviewed FROM image";
+                query = "SELECT img_id FROM image";
             } else {
-                query = "SELECT img_id, height, width, "+
-                        "cross_val, reviewed FROM image "+
+                query = "SELECT img_id FROM image "+
                         "WHERE cross_val=" +
                         crossVal;
             }
             query += " ORDER BY RAND() LIMIT " + numDocs;
             rs = conn.query(query);
+            while(rs.next())
+                imgIDs.add(rs.getString("img_id"));
+        } catch(Exception ex) {
+            Logger.log(ex);
+        }
+
+        //return a document collection based on these random IDs
+        return getDocumentSet(conn, imgIDs);
+    }
+
+    /**For debugging use only; returns the Document objects corresponding to
+     * the given docIDs
+     *
+     * @param conn
+     * @param docIDs
+     * @return
+     */
+    public static Collection<Document> getDocumentSet(DBConnector conn, Collection<String> docIDs)
+    {
+        CachedRowSet rs;
+        String query;
+        Map<String, Document> docDict = new HashMap<>();
+
+        //Convert the given docIDs to a query string component
+        Set<String> docIDs_enclosed = new HashSet<>();
+        docIDs.forEach(id -> docIDs_enclosed.add("'" + id + "'"));
+        String docIdStr = "(" + StringUtil.listToString(docIDs_enclosed, ",") + ")";
+
+        try{
+            Logger.log("Initializing Documents from <image>");
+            query = "SELECT img_id, height, width, "+
+                    "cross_val, reviewed FROM image "+
+                    "WHERE img_id IN " + docIdStr;
+            rs = conn.query(query);
             Set<String> imgIDs = new HashSet<>();
             while(rs.next()){
-                String imgID = rs.getString("img_id");
-                imgIDs.add("'" + imgID + "'");
-                Document d = new Document(imgID);
+                Document d = new Document(rs.getString("img_id"));
                 d.height = rs.getInt("height");
                 d.width = rs.getInt("width");
                 d.crossVal = Util.castInteger(rs.getObject("cross_val"));
                 d.reviewed = rs.getBoolean("reviewed");
                 docDict.put(d.getID(), d);
             }
-            String imgIdStr = "(" + StringUtil.listToString(imgIDs, ",") + ")";
 
             Logger.log("Building Tokens and Captions from <token>");
             query = "SELECT img_id, caption_idx, token_idx, " +
                     "token, lemma, pos_tag FROM token "+
-                    "WHERE img_id IN " + imgIdStr;
+                    "WHERE img_id IN " + docIdStr;
             rs = conn.query(query);
             while(rs.next()){
                 String imgID = rs.getString("img_id");
@@ -386,7 +415,7 @@ public class DocumentLoader
             Logger.log("Partitioning Tokens into Chunks with <chunk>");
             query = "SELECT img_id, caption_idx, chunk_idx, " +
                     "start_token_idx, end_token_idx, chunk_type "+
-                    "FROM chunk WHERE img_id IN " + imgIdStr;
+                    "FROM chunk WHERE img_id IN " + docIdStr;
             rs = conn.query(query);
             while(rs.next()){
                 String imgID = rs.getString("img_id");
@@ -402,7 +431,7 @@ public class DocumentLoader
             Logger.log("Loading bounding boxes from <box>");
             query = "SELECT img_id, box_id, x_min, y_min, " +
                     "x_max, y_max FROM box " +
-                    "WHERE img_id IN " + imgIdStr;
+                    "WHERE img_id IN " + docIdStr;
             Map<String, Map<Integer, BoundingBox>> boxDict = new HashMap<>();
             rs = conn.query(query);
             while(rs.next()){
@@ -422,7 +451,7 @@ public class DocumentLoader
                     "the bounding boxes from the previous step");
             query = "SELECT img_id, chain_id, assoc_box_ids, " +
                     "is_scene, is_orig_nobox FROM chain "+
-                    "WHERE img_id IN " + imgIdStr;
+                    "WHERE img_id IN " + docIdStr;
             rs = conn.query(query);
             while(rs.next()){
                 String imgID = rs.getString("img_id");
@@ -451,7 +480,7 @@ public class DocumentLoader
             query = "SELECT img_id, caption_idx, mention_idx, " +
                     "start_token_idx, end_token_idx, card_str, " +
                     "chain_id, lexical_type FROM mention " +
-                    "WHERE img_id IN " + imgIdStr;
+                    "WHERE img_id IN " + docIdStr;
             rs = conn.query(query);
             while(rs.next()){
                 String imgID = rs.getString("img_id");
@@ -478,7 +507,7 @@ public class DocumentLoader
             Logger.log("Reading dependency trees from <dependency>");
             query = "SELECT img_id, caption_idx, gov_token_idx, " +
                     "dep_token_idx, relation FROM dependency " +
-                    "WHERE img_id IN " + imgIdStr;
+                    "WHERE img_id IN " + docIdStr;
             Map<String, Map<Integer, Set<String>>> depDict = new HashMap<>();
             rs = conn.query(query);
             while(rs.next()){

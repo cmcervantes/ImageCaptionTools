@@ -494,4 +494,45 @@ public class Util
         }
         return false;
     }
+
+    /**Returns the index with the maximum value in the array;
+     * the first incidence of this value, if there are dups
+     */
+    public static <T extends Number> int getMaxIdx(T[] arr)
+    {
+        if(arr.length == 0)
+            return -1;
+
+        T maxVal = arr[0]; int maxIdx = 0;
+        for(int i=1; i<arr.length; i++){
+            if(arr[i].doubleValue() > maxVal.doubleValue()){
+                maxVal = arr[i];
+                maxIdx = i;
+            }
+        }
+        return maxIdx;
+    }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

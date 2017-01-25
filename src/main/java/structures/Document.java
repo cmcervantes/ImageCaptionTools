@@ -14,8 +14,6 @@ import java.util.List;
  */
 public class Document
 {
-    private static Set<String> _collectives = new HashSet<>(FileIO.readFile_lineList(
-            "/shared/projects/Flickr30kEntities_v2/resources/collectiveNouns.txt"));
     private static final String PTRN_APPOS = "^NP , (NP (VP |ADJP |PP |and )*)+,.*$";
     private static final String PTRN_LIST = "^NP , (NP ,?)* and NP.*$";
 
@@ -547,7 +545,7 @@ public class Document
             //Determine if this caption's chunk string (including extra-chunk tokens)
             //matches the appositive but _not_ the list pattern (since they overlap)
             if(c.toChunkTypeString(true).matches(PTRN_APPOS) &&
-                    !c.toChunkTypeString(true).matches(PTRN_LIST)){
+               !c.toChunkTypeString(true).matches(PTRN_LIST)){
                 //If we have a match, grab the first NP and VP
                 Chunk firstNP = m0.getChunkList().get(m0.getChunkList().size() - 1);
                 Chunk firstVP = null;
@@ -643,13 +641,19 @@ public class Document
 
             for(int j=i+1; j<mentionList.size(); j++){
                 Mention m_j = mentionList.get(j);
-
                 if(m_j.getChainID().equals("0"))
                     continue;
 
                 //skip coreferent pairs
                 if(m_i.getChainID().equals(m_j.getChainID()))
                     continue;
+
+                //skip non-pronominal heterogeneously typed pairs
+                if(m_i.getPronounType() == Mention.PRONOUN_TYPE.NONE &&
+                   m_j.getPronounType() == Mention.PRONOUN_TYPE.NONE &&
+                   Mention.getLexicalTypeMatch(m_i, m_j) == 0)
+                    continue;
+
 
                 //If our boxes are in a proper subset relationship,
                 //add them to the set

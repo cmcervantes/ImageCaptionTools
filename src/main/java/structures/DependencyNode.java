@@ -1,5 +1,6 @@
 package structures;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -14,7 +15,7 @@ import java.util.Set;
  * Various searching functions assume the use of the root node,
  * as searches proceed through dependents only
  */
-public class DependencyNode
+public class DependencyNode implements Serializable
 {
     private Token _token;
     private List<DependencyNode> _dependents;

@@ -1,5 +1,6 @@
 package structures;
 
+import java.io.Serializable;
 import java.util.List;
 
 /**The Annotation class abstracts the
@@ -7,7 +8,7 @@ import java.util.List;
  * Captions, Chunks, Mentions, and Tokens
  *
  */
-public abstract class Annotation
+public abstract class Annotation implements Serializable
 {
     protected int _idx;
     protected String _docID;

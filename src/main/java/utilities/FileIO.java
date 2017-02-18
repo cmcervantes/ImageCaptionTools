@@ -243,6 +243,46 @@ public class FileIO
         writeFile(table, fileRoot, "csv");
     }
 
+    /**Writes a serializable object to the specified file
+     *
+     * @param obj
+     * @param file
+     * @param <T>
+     */
+    public static <T> void writeObject(T obj, String file)
+    {
+        try{
+            ObjectOutputStream outStream =
+                    new ObjectOutputStream(new FileOutputStream(file));
+            outStream.writeObject(obj);
+            outStream.close();
+        } catch(IOException ioEx){
+            Logger.log(ioEx);
+        }
+    }
+
+    /**Reads a serializable object of type classType from the specified
+     * file
+     *
+     * @param classType
+     * @param file
+     * @param <T>
+     * @return
+     */
+    public static <T> T readObject(Class<T> classType, String file)
+    {
+        try {
+            ObjectInputStream inStream =
+                    new ObjectInputStream(new FileInputStream(file));
+            T obj = (T)inStream.readObject();
+            inStream.close();
+            return obj;
+        } catch(Exception ex){
+            Logger.log(ex);
+        }
+        return null;
+    }
+
     /**Reads <b>filename</b> into a list of lines
      *
      * @param filename  - The file to read

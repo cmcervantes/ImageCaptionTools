@@ -4,6 +4,7 @@ import utilities.FileIO;
 import utilities.StringUtil;
 import utilities.Util;
 
+import java.io.Serializable;
 import java.util.*;
 
 /**The Cardinality class encapsulates the notion
@@ -13,7 +14,7 @@ import java.util.*;
  *
  * @author ccervantes
  */
-public class Cardinality
+public class Cardinality implements Serializable
 {
     private static Set<String> _articles;
     private static Set<String> _quantifiers;
@@ -73,6 +74,11 @@ public class Cardinality
             _isNull = false;
             _baseValues = new int[]{-1,-1};
             _underdef = new boolean[]{false, false};
+        } else if(s.equals("null")){
+            _isMass = false;
+            _isNull = true;
+            _baseValues = new int[]{-1,-1};
+            _underdef = new boolean[]{true, true};
         } else {
             String[] arr = s.split("\\|");
             boolean setAmbig = arr[0].contains("+");

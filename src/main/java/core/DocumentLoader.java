@@ -23,6 +23,14 @@ public class DocumentLoader
                 {"bp", "4699 (47.3%)", "5 (0.1%)","3 (0.0%)","2 (0.0%)","4504 (45.3%)","0 (0.0%)","723 (7.3%)"}};
         System.out.println(StringUtil.toTableStr(table));
         */
+
+
+        DBConnector conn = new DBConnector("engr-cpanel-mysql.engr.illinois.edu",
+                "ccervan2_root", "thenIdefyheaven!", "ccervan2_imageCaption");
+        Collection<Document> docSet = DocumentLoader.getDocumentSet(conn, 0);
+        for(Document d : docSet)
+            d.getSubsetMentions();
+
     }
 
     /**Returns a set of Documents, based on a .coref file
@@ -341,7 +349,12 @@ public class DocumentLoader
                         "WHERE cross_val=" +
                         crossVal;
             }
-            query += " ORDER BY RAND() LIMIT " + numDocs;
+            query += " ORDER BY ";
+            if(conn.getDBType() == DBConnector.DBType.SQLITE)
+                query += "RANDOM() ";
+            else if(conn.getDBType() == DBConnector.DBType.MYSQL)
+                query += "RAND() ";
+            query += "LIMIT " + numDocs;
             rs = conn.query(query);
             while(rs.next())
                 imgIDs.add(rs.getString("img_id"));

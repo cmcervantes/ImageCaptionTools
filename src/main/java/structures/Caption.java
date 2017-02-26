@@ -10,8 +10,7 @@ import java.util.*;
  *
  * @author ccervantes
  */
-public class Caption extends Annotation
-{
+public class Caption extends Annotation {
     private static IllinoisLemmatizer lemmatizer;
 
     private List<Token> _tokenList;
@@ -19,14 +18,14 @@ public class Caption extends Annotation
     private List<Mention> _mentionList;
     private DependencyNode _rootNode;
 
-    /**Default Caption constructor
+    /**
+     * Default Caption constructor
      *
      * @param docID
      * @param idx
      * @param tokenList
      */
-    public Caption(String docID, int idx, List<Token> tokenList)
-    {
+    public Caption(String docID, int idx, List<Token> tokenList) {
         _docID = docID;
         _idx = idx;
         _tokenList = new ArrayList<>(tokenList);
@@ -34,14 +33,14 @@ public class Caption extends Annotation
         initMentionList();
     }
 
-    /**Constructs a Caption without tokens, which
+    /**
+     * Constructs a Caption without tokens, which
      * should be added with addToken()
      *
      * @param docID
      * @param idx
      */
-    public Caption(String docID, int idx)
-    {
+    public Caption(String docID, int idx) {
         _docID = docID;
         _idx = idx;
         _tokenList = new ArrayList<>();
@@ -49,29 +48,30 @@ public class Caption extends Annotation
         _mentionList = new ArrayList<>();
     }
 
-    /**Empty Caption constructor for use during static
+    /**
+     * Empty Caption constructor for use during static
      * Caption construction
      */
-    private Caption()
-    {
+    private Caption() {
         _tokenList = new ArrayList<>();
         _chunkList = new ArrayList<>();
         _mentionList = new ArrayList<>();
     }
 
-    /**Adds the given Token to the internal list
+    /**
+     * Adds the given Token to the internal list
      * in the position determined by token index
      *
      * @param t
      */
-    public void addToken(Token t)
-    {
+    public void addToken(Token t) {
         int insertionIdx =
                 Annotation.getInsertionIdx(_tokenList, t);
         _tokenList.add(insertionIdx, t);
     }
 
-    /**Creates a new Chunk with the tokens at the given
+    /**
+     * Creates a new Chunk with the tokens at the given
      * ranges and type, adding it into the internal chunk
      * list based on the given index
      *
@@ -81,21 +81,21 @@ public class Caption extends Annotation
      * @param endTokenIdx
      */
     public void addChunk(int chunkIdx, String chunkType,
-                         int startTokenIdx, int endTokenIdx)
-    {
+                         int startTokenIdx, int endTokenIdx) {
         Chunk ch = new Chunk(_docID, _idx, chunkIdx, chunkType,
-                _tokenList.subList(startTokenIdx, endTokenIdx+1));
+                _tokenList.subList(startTokenIdx, endTokenIdx + 1));
         int insertionIdx = Annotation.getInsertionIdx(_chunkList, ch);
         _chunkList.add(insertionIdx, ch);
 
         //associates this chunk's tokens with this index
-        for(int i=startTokenIdx; i<= endTokenIdx; i++){
+        for (int i = startTokenIdx; i <= endTokenIdx; i++) {
             _tokenList.get(i).chunkIdx = chunkIdx;
             _tokenList.get(i).chunkType = chunkType;
         }
     }
 
-    /**Adds a new Mention with the given attributes and
+    /**
+     * Adds a new Mention with the given attributes and
      * returns it
      *
      * @param idx
@@ -108,26 +108,25 @@ public class Caption extends Annotation
      */
     public Mention addMention(int idx, String lexicalType, String chainID,
                               Cardinality card, int startTokenIdx,
-                              int endTokenIdx)
-    {
+                              int endTokenIdx) {
         List<Token> mentionTokenList =
-                _tokenList.subList(startTokenIdx, endTokenIdx+1);
+                _tokenList.subList(startTokenIdx, endTokenIdx + 1);
         List<Chunk> mentionChunkList = new ArrayList<>();
         int startChunkIdx = mentionTokenList.get(0).chunkIdx;
-        int endChunkIdx = mentionTokenList.get(mentionTokenList.size()-1).chunkIdx;
-        for(int i=startChunkIdx; i<=endChunkIdx; i++)
-            if(i > -1 && i < _chunkList.size())
+        int endChunkIdx = mentionTokenList.get(mentionTokenList.size() - 1).chunkIdx;
+        for (int i = startChunkIdx; i <= endChunkIdx; i++)
+            if (i > -1 && i < _chunkList.size())
                 mentionChunkList.add(_chunkList.get(i));
 
         Mention m = new Mention(_docID, _idx, idx, chainID,
-                    mentionTokenList, mentionChunkList,
-                    lexicalType, card);
+                mentionTokenList, mentionChunkList,
+                lexicalType, card);
         int insertionIdx =
                 Annotation.getInsertionIdx(_mentionList, m);
         _mentionList.add(insertionIdx, m);
 
         //associates this mention's tokens with this index
-        for(int i=startTokenIdx; i<= endTokenIdx; i++) {
+        for (int i = startTokenIdx; i <= endTokenIdx; i++) {
             _tokenList.get(i).mentionIdx = idx;
             _tokenList.get(i).chainID = chainID;
         }
@@ -135,14 +134,14 @@ public class Caption extends Annotation
         return m;
     }
 
-    /**Constructs the dependency tree (and sets the internal root node)
+    /**
+     * Constructs the dependency tree (and sets the internal root node)
      * based on the given dependency strings, which must be in the
      * format gov_token_idx|relation|dep_token_idx
      *
      * @param dependencyStrings
      */
-    public void setRootNode(Collection<String> dependencyStrings)
-    {
+    public void setRootNode(Collection<String> dependencyStrings) {
         List<String> depStrings = new ArrayList<>(dependencyStrings);
         boolean[] usedDepBits = new boolean[depStrings.size()];
         Arrays.fill(usedDepBits, false);
@@ -150,29 +149,29 @@ public class Caption extends Annotation
 
         //construct our dependency tree, given the strings
         boolean addedNode;
-        do{
+        do {
             addedNode = false;
-            for(int i=0; i<depStrings.size(); i++){
-                if(!usedDepBits[i]){
+            for (int i = 0; i < depStrings.size(); i++) {
+                if (!usedDepBits[i]) {
                     String[] depArr = depStrings.get(i).split("\\|");
                     int govTokenIdx = Integer.parseInt(depArr[0]);
                     int depTokenIdx = Integer.parseInt(depArr[2]);
 
-                    if(govTokenIdx < 0){
+                    if (govTokenIdx < 0) {
                         //if we already have a root node, bomb; I don't yet have a way to handle
                         //multi-rooted captions
                         //TODO: enable captions with multiple dependency roots
-                        if(_rootNode != null){
+                        if (_rootNode != null) {
                             _rootNode = null;
                             return;
                         }
                         _rootNode = new DependencyNode(_tokenList.get(depTokenIdx));
                         usedDepBits[i] = true;
                         addedNode = true;
-                    } else if(_rootNode != null){
+                    } else if (_rootNode != null) {
                         //get the tokens specified by the indices
                         DependencyNode govNode = _rootNode.findDependent(_tokenList.get(govTokenIdx));
-                        if(govNode != null){
+                        if (govNode != null) {
                             govNode.addDependent(_tokenList.get(depTokenIdx), depArr[1]);
                             usedDepBits[i] = true;
                             addedNode = true;
@@ -180,138 +179,274 @@ public class Caption extends Annotation
                     }
                 }
             }
-        }while(addedNode);
+        } while (addedNode);
     }
 
-    /**Returns the Chunk immediately left-adjacent to ch;
+    /**
+     * Returns the Chunk immediately left-adjacent to ch;
      * null if ch is the first chunk
      *
      * @param ch
      * @return
      */
-    public Chunk getLeftNeighbor(Chunk ch)
-    {
-        if(ch.getIdx() > 0)
-            return _chunkList.get(ch.getIdx()-1);
+    public Chunk getLeftNeighbor(Chunk ch) {
+        if (ch.getIdx() > 0)
+            return _chunkList.get(ch.getIdx() - 1);
         return null;
     }
 
-    /**Returns the Chunk immediately right-adjacent to ch;
+    /**
+     * Returns the Chunk immediately right-adjacent to ch;
      * null if ch is the last chunk
      *
      * @param ch
      * @return
      */
-    public Chunk getRightNeighbor(Chunk ch)
-    {
-        if(ch.getIdx() < _chunkList.size() - 1)
-            return _chunkList.get(ch.getIdx()+1);
+    public Chunk getRightNeighbor(Chunk ch) {
+        if (ch.getIdx() < _chunkList.size() - 1)
+            return _chunkList.get(ch.getIdx() + 1);
         return null;
     }
 
     /* Getters */
-    public List<Mention> getMentionList(){return _mentionList;}
-    public List<Token> getTokenList(){return _tokenList;}
-    public List<Chunk> getChunkList(){return _chunkList;}
-    public DependencyNode getRootNode(){return _rootNode;}
+    public List<Mention> getMentionList() {
+        return _mentionList;
+    }
 
-    /**Returns a dataset-unique ID for this caption, in the form
+    public List<Token> getTokenList() {
+        return _tokenList;
+    }
+
+    public List<Chunk> getChunkList() {
+        return _chunkList;
+    }
+
+    public DependencyNode getRootNode() {
+        return _rootNode;
+    }
+
+    /**
+     * Returns a dataset-unique ID for this caption, in the form
      * docID#capIdx
      *
      * @return
      */
-    public String getUniqueID()
-    {
+    public String getUniqueID() {
         return _docID + "#" + _idx;
     }
 
-    /**Returns a list of interstitial chunks between chunks c1 and c2;
+    /**
+     * Returns a list of interstitial chunks between chunks c1 and c2;
      * empty list if c1 is adjacent to c2
+     *
      * @param c1
      * @param c2
      * @return
      */
-    public List<Chunk> getInterstitialChunks(Chunk c1, Chunk c2)
-    {
-        int startIdx = c1.getIdx()+1;
+    public List<Chunk> getInterstitialChunks(Chunk c1, Chunk c2) {
+        int startIdx = c1.getIdx() + 1;
         int endIdx = c2.getIdx();
 
         //sublist is [inclusive,exclusive)
-        if(startIdx < endIdx)
+        if (startIdx < endIdx)
             return new ArrayList<>(_chunkList.subList(startIdx, endIdx));
         return new ArrayList<>();
     }
 
-    /**Returns a list of interstitial chunks between mentions m1 and m2;
+    /**
+     * Returns a list of interstitial chunks between mentions m1 and m2;
      * empty list if m1 is adjacent to m2
      *
      * @param m1
      * @param m2
      * @return
      */
-    public List<Chunk> getInterstitialChunks(Mention m1, Mention m2)
-    {
-        Chunk lastChunk_1 = m1.getChunkList().get(m1.getChunkList().size()-1);
+    public List<Chunk> getInterstitialChunks(Mention m1, Mention m2) {
+        Chunk lastChunk_1 = m1.getChunkList().get(m1.getChunkList().size() - 1);
         Chunk firstChunk_2 = m2.getChunkList().get(0);
         return getInterstitialChunks(lastChunk_1, firstChunk_2);
     }
 
-    /**Returns a list of interstitial tokens between chunks c1 and c2;
+    /**
+     * Returns a list of interstitial tokens between chunks c1 and c2;
      * empty list if c1 is adjacent to c2
+     *
      * @param c1
      * @param c2
      * @return
      */
-    public List<Token> getInterstitialTokens(Chunk c1, Chunk c2)
-    {
+    public List<Token> getInterstitialTokens(Chunk c1, Chunk c2) {
         int startIdx = c1.getTokenRange()[1] + 1;
         int endIdx = c2.getTokenRange()[0];
 
         //sublist is [inclusive,exclusive)
-        if(startIdx < endIdx)
+        if (startIdx < endIdx)
             return new ArrayList<>(_tokenList.subList(startIdx, endIdx));
         return new ArrayList<>();
     }
 
-    /**Returns a list of interstitial tokens between mentions m1 and m2;
+    /**
+     * Returns a list of interstitial tokens between mentions m1 and m2;
      * empty list if m1 is adjacent to m2
      *
      * @param m1
      * @param m2
      * @return
      */
-    public List<Token> getInterstitialTokens(Mention m1, Mention m2)
-    {
-        if(m1.getChunkList() != null && !m1.getChunkList().isEmpty() &&
-           m2.getChunkList() != null && !m2.getChunkList().isEmpty()){
-            Chunk lastChunk_1 = m1.getChunkList().get(m1.getChunkList().size()-1);
+    public List<Token> getInterstitialTokens(Mention m1, Mention m2) {
+        if (m1.getChunkList() != null && !m1.getChunkList().isEmpty() &&
+                m2.getChunkList() != null && !m2.getChunkList().isEmpty()) {
+            Chunk lastChunk_1 = m1.getChunkList().get(m1.getChunkList().size() - 1);
             Chunk firstChunk_2 = m2.getChunkList().get(0);
             return getInterstitialTokens(lastChunk_1, firstChunk_2);
         }
         return new ArrayList<>();
     }
 
-    /**Returns the text of this caption
+    /**
+     * Returns the text of this caption
      *
      * @return
      */
     @Override
-    public String toString()
-    {
+    public String toString() {
         return StringUtil.listToString(_tokenList, " ");
     }
 
-    /**Returns this caption's attributes as a key:value; string
+    /**
+     * Returns this caption's attributes as a key:value; string
      *
-     * @return  - key-value string of caption attributes
+     * @return - key-value string of caption attributes
      */
     @Override
-    public String toDebugString()
-    {
+    public String toDebugString() {
         String[] keys = {"numTokens", "numChunks", "numMentions"};
         Object[] vals = {_tokenList.size(), _chunkList.size(), _mentionList.size()};
         return StringUtil.toKeyValStr(keys, vals);
     }
+
+    /**Returns this caption as a latex string, where each mention is
+     * bracketed, with mentionAssigs assignments as superscripts
+     *
+     * @param mentionAssigs
+     * @return
+     */
+    public String toLatexString(Map<String, String> mentionAssigs)
+    {
+        return toLatexString(mentionAssigs, null, false, false);
+    }
+
+    /**Returns this caption as a latex string, where each mention
+     * is bolded or bracketed (depeding on useBold) with assignments
+     * from mentionAssigs as superscripts or subscripts
+     * (depending on subscript), where --if assigColors is not null --
+     * mentions have their assignment's color
+     *
+     * @param mentionAssigs
+     * @param assigColors
+     * @param subscript
+     * @return
+     */
+    public String toLatexString(Map<String, String> mentionAssigs,
+                                Map<String, String> assigColors,
+                                boolean useBold, boolean subscript)
+    {
+        //create a mapping from token indices to mention IDs
+        //(but only for those tokens that are in mentions)
+        Map<Integer, String> tokenIdxMentionIdDict = new HashMap<>();
+        for(Mention m : _mentionList)
+            for(Token t : m.getTokenList())
+                tokenIdxMentionIdDict.put(t.getIdx(), m.getUniqueID());
+
+        StringBuilder sb = new StringBuilder();
+        String lastMentionID = null;
+        boolean buildingMention = false;
+        for(Token t : _tokenList)
+        {
+            String currentMentionID = tokenIdxMentionIdDict.get(t.getIdx());
+
+            //Switch on the last/current equality. Essentially
+            //1) If equal (or both null): add t without markup
+            //2) If last is null, current is not: start markup, add t
+            //3) If last is mention, current is null: end markup, add t
+            //4) If inequal, neither is null: end markup, start markup, add t
+            if((lastMentionID != null && !lastMentionID.equals(currentMentionID)) ||
+                (currentMentionID != null && !currentMentionID.equals(lastMentionID)))
+            {
+                //by reaching here, we know we have inequal
+                //mentionIDs. So, using that switch logic comment
+                //above, we know to add end markup if we see
+                //a non-null lastMention
+                if(lastMentionID != null)
+                {
+                    sb.deleteCharAt(sb.length()-1);
+
+                    if(useBold)
+                        sb.append("}");
+                    else
+                        sb.append("]");
+                    if(subscript)
+                        sb.append("\\textsubscript{");
+                    else
+                        sb.append("\\textsuperscript{");
+                    sb.append(mentionAssigs.get(lastMentionID));
+                    sb.append("}");
+
+                    if(assigColors != null)
+                        sb.append("}");
+
+                    sb.append(" ");
+                    buildingMention = false;
+                }
+
+                //we also know to add start mention markup
+                //if we see a non-null currentMentionID
+                if(currentMentionID != null)
+                {
+                    if(assigColors != null){
+                        String color = assigColors.get(mentionAssigs.get(currentMentionID));
+                        if(color == null)
+                            color = "black";
+                        sb.append("\\textcolor{");
+                        sb.append(color);
+                        sb.append("}{");
+                    }
+
+                    if(useBold)
+                        sb.append("\\textbf{");
+                    else
+                        sb.append("[");
+
+                    buildingMention = true;
+                }
+            }
+            lastMentionID = currentMentionID;
+
+            //regardless of how we switched, above, we still want
+            //to add this token. So add it.
+            sb.append(t.toString());
+            sb.append(" ");
+        }
+        //if we're still building a mention, close it
+        if(buildingMention) {
+            if(useBold)
+                sb.append("}");
+            else
+                sb.append("]");
+            if(subscript)
+                sb.append("\\textsubscript{");
+            else
+                sb.append("\\textsuperscript{");
+            sb.append(mentionAssigs.get(lastMentionID));
+            sb.append("}");
+
+            if(assigColors != null)
+                sb.append("}");
+        }
+        return sb.toString();
+    }
+
+
 
     /**Returns this caption as an html string where
      * mentions are enclosed in span tags

@@ -6,6 +6,9 @@ import edu.illinois.cs.cogcomp.lbjava.nlp.seg.Token;
 import edu.illinois.cs.cogcomp.lbjava.parse.ChildrenFromVectors;
 import edu.illinois.cs.cogcomp.lbjava.parse.LinkedVector;
 import edu.illinois.cs.cogcomp.lbjava.parse.Parser;
+import structures.Caption;
+import structures.Cardinality;
+import structures.Mention;
 import utilities.FileIO;
 import utilities.StringUtil;
 
@@ -65,6 +68,73 @@ public class Chunker
     public String predict(Token word)
     {
         return chunker.discreteValue(word);
+    }
+
+    /**Given a set of Illinois.CogComp tokens (such as those
+     * produced by Tagger.predict ) and the docID / capIdx,
+     * returns a Caption (from our structure)
+     *
+     * @param toks
+     * @param docID
+     * @param capIdx
+     * @return
+     */
+    public Caption predictCaptionChunks(Token[] toks, String docID, int capIdx)
+    {
+        Caption c = new Caption(docID, capIdx);
+
+        //Convert these illinois.cogcomp tokens to our tokens for the caption
+        for(int i=0; i<toks.length; i++){
+            Token t = toks[i];
+            c.addToken(new structures.Token(docID, capIdx, i,
+                t.form, t.lemma, t.partOfSpeech));
+        }
+
+        //Predict chunk indices
+        int startIdx = -1, chunkIdx = 0, mentionIdx = 0;
+        String previousChunkType = "";
+        for(int i=0; i<=toks.length; i++){
+            boolean chunkStart = false, chunkEnd = false;
+            String chunkType = "";
+
+            //If this is the last token, it's the end of the chunk
+            if(i == toks.length) {
+                chunkEnd = true;
+            } else {
+                //predict this BIO tag
+                String predBIO = predict(toks[i]);
+                String[] bioParts = predBIO.split("-");
+                if(!bioParts[0].equals("I")){
+                    chunkEnd = true;
+                    if(bioParts[0].equals("B"))
+                        chunkStart = true;
+                }
+                if(bioParts.length > 1)
+                    chunkType = bioParts[1];
+            }
+
+            //If this is the end of the chunk for which
+            //there's a start index, add it to the caption
+            if(chunkEnd && startIdx > -1){
+                c.addChunk(chunkIdx, previousChunkType, startIdx, i-1);
+                if(previousChunkType.equals("NP")){
+                    String headLemma = toks[i-1].lemma;
+                    c.addMention(mentionIdx, Mention.getLexicalEntry(headLemma),
+                                 "-1", new Cardinality(false), startIdx, i-1);
+                    mentionIdx++;
+                }
+                startIdx = -1; previousChunkType = "";
+                chunkIdx++;
+            }
+
+            //if this is the start of a chunk, add this idx
+            //as the beginning
+            if(chunkStart){
+                previousChunkType = chunkType;
+                startIdx = i;
+            }
+        }
+        return c;
     }
 
     /**Trains a new Chunker model for numIter iterations,

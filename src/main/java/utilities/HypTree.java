@@ -29,7 +29,7 @@ public class HypTree {
      * is null, adds child to root
      *
      * @param data       - The child to add
-     * @param parentData - The parent of this child
+     * @param parent     - The HypNode parent
      * @param tagCount   - The child tag count
      * @return           - The HypNode that was added
      */
@@ -175,6 +175,19 @@ public class HypTree {
             childIdx++;
         }
         return foundNode;
+    }
+
+    /**Returns an order-independent list of this
+     * hypernym tree's senses
+     *
+     * @return
+     */
+    public Set<ISynset> getAllSenses()
+    {
+        Set<ISynset> senses = new HashSet<>();
+        for(HypNode node : _rootBranches)
+            senses.add(node._data);
+        return senses;
     }
 
     /**Returns whether this HypTree contains the given data

@@ -261,7 +261,11 @@ public class Caption extends Annotation {
      * @param m2
      * @return
      */
-    public List<Chunk> getInterstitialChunks(Mention m1, Mention m2) {
+    public List<Chunk> getInterstitialChunks(Mention m1, Mention m2)
+    {
+        if(m1.getChunkList() == null || m2.getChunkList() == null ||
+           m1.getChunkList().isEmpty() || m2.getChunkList().isEmpty())
+            return new ArrayList<>();
         Chunk lastChunk_1 = m1.getChunkList().get(m1.getChunkList().size() - 1);
         Chunk firstChunk_2 = m2.getChunkList().get(0);
         return getInterstitialChunks(lastChunk_1, firstChunk_2);

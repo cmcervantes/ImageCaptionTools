@@ -259,7 +259,7 @@ public class AttrStruct
             sb.append(StringUtil.listToString(_attrs.get(name), ","));
             if(vals.size() > 1)
                 sb.append("\\}");
-            sb.append("\\\\\n");
+            sb.append("\\cr\n");
         }
         for(String name : nestedNames){
             sb.append(name.replace("_", "\\_"));
@@ -270,11 +270,11 @@ public class AttrStruct
                 sb.append("\\{");
             for(AttrStruct as : vals){
                 sb.append(as.toLatexString());
-                sb.append("\\\\\n");
+                sb.append("\\cr\n");
             }
             if(vals.size() > 1)
                 sb.append("\\}");
-            sb.append("\\\\\n");
+            sb.append("\\cr\n");
         }
         sb.append("]\\end{avm}");
         return sb.toString();

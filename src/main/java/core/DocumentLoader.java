@@ -1,6 +1,8 @@
 package core;
 
+import nlptools.Chunker;
 import nlptools.DependencyParser;
+import nlptools.Tagger;
 import structures.*;
 import utilities.*;
 
@@ -16,21 +18,15 @@ public class DocumentLoader
 
     public static void main(String[] args)
     {
-        /*
-        String[][] table = {{"", "n|n", "n|p", "c|n", "b|n", "b|p", "b|b", "c|c"},
-                            {"nn", "319836 (97.9%)", "11 (0.0%)", "9 (0.0%)", "0 (0.0%)", "1940 (0.6%)", "1 (0.0%)", "4797 (1.5%)"},
-                {"cc", "8673 (15.0%)", "2 (0.0%)", "15 (0.0%)", "2 (0.0%)", "246 (0.4%)", "0 (0.0%)", "49048 (84.6%)"},
-                {"bp", "4699 (47.3%)", "5 (0.1%)","3 (0.0%)","2 (0.0%)","4504 (45.3%)","0 (0.0%)","723 (7.3%)"}};
-        System.out.println(StringUtil.toTableStr(table));
-        */
+        Tagger tggr = new Tagger("/home/syphonnihil/source/data/pos/");
+        edu.illinois.cs.cogcomp.lbjava.nlp.seg.Token[] toks =
+                tggr.predict("A man in a blue suit walks on a beach.");
+        Chunker chnkr = new Chunker("/home/syphonnihil/source/data/chunk/");
 
+        //IllinoisTokenizer illTok = new IllinoisTokenizer();
+        //Pair<String[], IntPair[]> tokens = illTok.tokenizeSentence("A man in a blue suit walks on the beach.");
 
-        DBConnector conn = new DBConnector("engr-cpanel-mysql.engr.illinois.edu",
-                "ccervan2_root", "thenIdefyheaven!", "ccervan2_imageCaption");
-        Collection<Document> docSet = DocumentLoader.getDocumentSet(conn, 0);
-        for(Document d : docSet)
-            d.getSubsetMentions();
-
+        System.out.println();
     }
 
     /**Returns a set of Documents, based on a .coref file

@@ -363,6 +363,18 @@ public class Mention extends Annotation
             _lexiconDict.put(lemma, StringUtil.listToString(lemmaTypeSetDict.get(lemma), "/"));
     }
 
+    /**Returns the lexical type entry for the given lemma
+     *
+     * @param lemma
+     * @return
+     */
+    public static String getLexicalEntry(String lemma)
+    {
+        if(_lexiconDict.containsKey(lemma))
+            return _lexiconDict.get(lemma);
+        return "other";
+    }
+
     /**PRONOUN_TYPE enumerates various pronoun types as well as provides
      * static functions for handling them;
      * NOTE: pronoun types are based on internal lists
@@ -550,7 +562,7 @@ public class Mention extends Annotation
                     this == OBJECTIVE_PLURAL ||
                     this == REFLEXIVE_SINGULAR ||
                     this == REFLEXIVE_PLURAL ||
-                    this == RELATIVE ||
+                    this == RELATIVE || this == SEMI ||
                     this == OTHER;
         }
     }

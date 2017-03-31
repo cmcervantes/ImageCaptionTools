@@ -580,8 +580,10 @@ public class Document
                     continue;
                 if(sub.getChainID().equals(sup.getChainID()))
                     continue;
-                subsets.add(new Chain[]{_chainDict.get(sub.getChainID()),
-                        _chainDict.get(sup.getChainID())});
+                Chain[] chainPair = new Chain[]{_chainDict.get(sub.getChainID()),
+                    _chainDict.get(sup.getChainID())};
+                if(!Util.containsArr(subsets, chainPair))
+                    subsets.add(chainPair);
             }
         }
         return subsets;
@@ -762,43 +764,6 @@ public class Document
                 }
             }
         } while(subsets.size() != subsetList.size());
-
-        /*
-        List<Mention[]> subsetList;
-        do{
-            subsetList = new ArrayList<>(subsets);
-            for(int i=0; i<subsetList.size(); i++){
-                Mention sub_i = subsetList.get(i)[0];
-                Mention sup_i = subsetList.get(i)[1];
-
-                for(int j=i+1; j<subsetList.size(); j++){
-                    Mention sub_j = subsetList.get(j)[0];
-                    Mention sup_j = subsetList.get(j)[1];
-
-                    //In practice we're really either adding a
-                    //sub_i -> sup_j link or a sub_j -> sup_i link,
-                    //so we can combine appropriately
-                    Mention[] pairToAdd = null;
-                    if(sup_i.equals(sub_j) || //ij ordering
-                       sup_i.getChainID().equals(sub_j.getChainID())) {
-                        pairToAdd = new Mention[]{sub_i, sup_j};
-                    } else if(sup_j.equals(sub_i) || //ji ordering
-                              sub_i.getChainID().equals(sup_j.getChainID())) {
-                        pairToAdd = new Mention[]{sub_j, sup_i};
-                    }
-
-                    //Only add pairs that aren't already in the set _and_ that do not
-                    //appear in the inverse
-                    if(pairToAdd != null){
-                        if(!Util.containsArr(subsets, pairToAdd) &&
-                           !Util.containsArr(subsets, new Mention[]{pairToAdd[1], pairToAdd[0]})){
-                            subsets.add(pairToAdd);
-                        }
-                    }
-                }
-            }
-        } while(subsetList.size() != subsets.size());
-        return subsets;*/
     }
 
     /**Returns the pair of mention objects specified in the

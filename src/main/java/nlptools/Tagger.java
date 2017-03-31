@@ -68,7 +68,6 @@ public class Tagger
      * @param sentence
      * @return
      */
-    @Deprecated
     public Token[] predict(String sentence)
     {
         List<Token> tokenList = new ArrayList<>();
@@ -94,11 +93,10 @@ public class Tagger
     private String predict(Token word)
     {
         String predTag;
-        if(baselineTarget.getInstance().observed(__wordForm.discreteValue(word))){
+        if(baselineTarget.getInstance().observed(__wordForm.discreteValue(word)))
             predTag = _posTaggerKnown.discreteValue(word);
-        } else {
+        else
             predTag = _posTaggerUnknown.discreteValue(word);
-        }
         return predTag;
     }
 

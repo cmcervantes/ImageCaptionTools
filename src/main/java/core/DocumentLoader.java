@@ -1,8 +1,9 @@
 package core;
 
-import nlptools.Chunker;
-import nlptools.DependencyParser;
-import nlptools.Tagger;
+import nlptools.IllinoisChunker;
+import nlptools.StanfordParser;
+import nlptools.IllinoisTagger;
+import nlptools.StanfordTagger;
 import structures.*;
 import utilities.*;
 
@@ -18,10 +19,13 @@ public class DocumentLoader
 
     public static void main(String[] args)
     {
-        Tagger tggr = new Tagger("/home/syphonnihil/source/data/pos/");
+        StanfordTagger stanTagger = new StanfordTagger();
+        System.exit(0);
+
+        IllinoisTagger tggr = new IllinoisTagger("/home/syphonnihil/source/data/pos/");
         edu.illinois.cs.cogcomp.lbjava.nlp.seg.Token[] toks =
                 tggr.predict("A man in a blue suit walks on a beach.");
-        Chunker chnkr = new Chunker("/home/syphonnihil/source/data/chunk/");
+        IllinoisChunker chnkr = new IllinoisChunker("/home/syphonnihil/source/data/chunk/");
 
         //IllinoisTokenizer illTok = new IllinoisTokenizer();
         //Pair<String[], IntPair[]> tokens = illTok.tokenizeSentence("A man in a blue suit walks on the beach.");
@@ -44,19 +48,89 @@ public class DocumentLoader
         Cardinality.initCardLists(wordListDir + "/collectiveNouns.txt");
         Caption.initLemmatizer();
 
-        Map<String, Set<String>> corefDict = new HashMap<>();
+        Map<String, List<String>> corefDict = new HashMap<>();
         for(String corefStr : corefList){
-            String docID = corefStr.split("#")[0];
-            if(!corefDict.containsKey(docID))
-                corefDict.put(docID, new HashSet<>());
-            corefDict.get(docID).add(corefStr);
+            String idStr = corefStr.split("\t")[0];
+            String[] idParts = idStr.split("#");
+            if(!corefDict.containsKey(idParts[0]))
+                corefDict.put(idParts[0], new ArrayList<>());
+            corefDict.get(idParts[0]).add(Integer.parseInt(idParts[1]), corefStr);
         }
 
         Set<Document> docSet = new HashSet<>();
-        for(Set<String> corefStrSet : corefDict.values())
+        for(List<String> corefStrSet : corefDict.values())
             docSet.add(new Document(corefStrSet));
 
         return docSet;
+    }
+
+    /**Returns a set of Documents, based on a coref file, bounding box file, and image info file
+     * (written for loading MSCOCO images)
+     *
+     * @param corefFile
+     * @param bboxFile
+     * @param imgFile
+     * @return
+     */
+    public static Collection<Document> getDocumentSet(String corefFile, String bboxFile,
+                                                      String imgFile, String lexiconDir,
+                                                      String wordListDir)
+    {
+        List<String> corefList = FileIO.readFile_lineList(corefFile);
+        Mention.initLexiconDict(lexiconDir);
+        Cardinality.initCardLists(wordListDir + "/collectiveNouns.txt");
+        Caption.initLemmatizer();
+
+        //Load .coref files and build the documents
+        Map<String, List<String>> corefDict = new HashMap<>();
+        for(String corefStr : corefList){
+            String idStr = corefStr.split("\t")[0];
+            String[] idParts = idStr.split("#");
+            if(!corefDict.containsKey(idParts[0]))
+                corefDict.put(idParts[0], new ArrayList<>());
+            corefDict.get(idParts[0]).add(Integer.parseInt(idParts[1]), corefStr);
+        }
+
+        Map<String, Document> docDict = new HashMap<>();
+        for(List<String> corefStrSet : corefDict.values()){
+            Document d = new Document(corefStrSet);
+            docDict.put(d.getID(), d);
+        }
+
+        //Load the img file and augment the documents
+        String[][] imgTable = FileIO.readFile_table(imgFile);
+        System.out.println(imgTable.length);
+        for(String row[] : imgTable){
+            //Assume a format of
+            //      id, url, cross_val, height, width
+            String ID = row[0];
+            docDict.get(ID).imgURL = row[1];
+            docDict.get(ID).crossVal = Integer.parseInt(row[2]);
+            docDict.get(ID).height = Integer.parseInt(row[3]);
+            docDict.get(ID).width = Integer.parseInt(row[4]);
+        }
+
+        //load bounding box file and add these bounding boxes
+        //to the documents
+        String[][] boxTable = FileIO.readFile_table(bboxFile);
+        System.out.println(boxTable.length);
+        for(String row[] : FileIO.readFile_table(bboxFile)){
+            //Assume format
+            //      img_id, box_idx, box_id, category, supercateogry, x, y, width, height
+            String docID = row[0];
+            int boxIdx = Integer.parseInt(row[1]);
+            String cat = row[3]; String superCat = row[4];
+            int xMin = (int)Double.parseDouble(row[5]);
+            int yMin = (int)Double.parseDouble(row[6]);
+            int xMax = xMin + (int)Double.parseDouble(row[7]);
+            int yMax = yMin + (int)Double.parseDouble(row[8]);
+            Set<String> assocChains = new HashSet<>();
+            assocChains.add("-1");
+            docDict.get(docID).addBoundingBox(new BoundingBox(docID,
+                    boxIdx, xMin, yMin, xMax, yMax, cat, superCat), assocChains);
+        }
+
+        return docDict.values();
     }
 
     /**Returns a set of Documents, based on a Flickr30kEntities directory
@@ -94,6 +168,7 @@ public class DocumentLoader
         return getDocumentSet(conn, -1);
     }
 
+
     /**Returns a set of Documents constructed from the database specified in
      * the given conn, selecting only those images specified by the given
      * crossVal flag; note that this database must be of the same format as
@@ -102,7 +177,7 @@ public class DocumentLoader
      * @param conn
      * @param crossVal
      * @return
-     */
+     *
     public static Collection<Document> getDocumentSet(DBConnector conn, int crossVal)
     {
         CachedRowSet rs;
@@ -117,8 +192,7 @@ public class DocumentLoader
             } else {
                 query = "SELECT img_id, height, width, "+
                         "cross_val, reviewed FROM image "+
-                        "WHERE cross_val=" +
-                        crossVal;
+                        "WHERE cross_val=" + crossVal;
             }
             rs = conn.query(query);
             while(rs.next()){
@@ -321,6 +395,34 @@ public class DocumentLoader
         Logger.log("Document loading complete");
         return new HashSet<>(docDict.values());
     }
+    */
+
+    /**Returns all the Documents constructed from the given database conn of the
+     * given crossVal flag
+     *
+     * @param conn
+     * @param crossVal
+     * @return
+     */
+    public static Collection<Document> getDocumentSet(DBConnector conn, int crossVal)
+    {
+        int numDocs = 0;
+
+        //Get the total number of documents with the specified crossval flag
+        String query = "SELECT COUNT(*) AS row_count FROM image";
+        if(crossVal >= 0)
+            query += " WHERE cross_val=" + crossVal;
+        query += ";";
+
+        CachedRowSet rs;
+        try{
+            rs = conn.query(query);
+            rs.next();
+            numDocs = rs.getInt("row_count") ;
+        } catch(Exception ex) {Logger.log(ex);}
+
+        return getDocumentSet(conn, crossVal, numDocs);
+    }
 
     /**For debugging use only; returns a random set of numDocs Documents from the
      * specified database with the given crossVal flag.
@@ -383,16 +485,16 @@ public class DocumentLoader
         try{
             Logger.log("Initializing Documents from <image>");
             query = "SELECT img_id, height, width, "+
-                    "cross_val, reviewed FROM image "+
+                    "cross_val, reviewed, img_url FROM image "+
                     "WHERE img_id IN " + docIdStr;
             rs = conn.query(query);
-            Set<String> imgIDs = new HashSet<>();
             while(rs.next()){
                 Document d = new Document(rs.getString("img_id"));
                 d.height = rs.getInt("height");
                 d.width = rs.getInt("width");
                 d.crossVal = Util.castInteger(rs.getObject("cross_val"));
                 d.reviewed = rs.getBoolean("reviewed");
+                d.imgURL = rs.getString("img_url");
                 docDict.put(d.getID(), d);
             }
 
@@ -439,7 +541,7 @@ public class DocumentLoader
 
             Logger.log("Loading bounding boxes from <box>");
             query = "SELECT img_id, box_id, x_min, y_min, " +
-                    "x_max, y_max FROM box " +
+                    "x_max, y_max, category, super_category FROM box " +
                     "WHERE img_id IN " + docIdStr;
             Map<String, Map<Integer, BoundingBox>> boxDict = new HashMap<>();
             rs = conn.query(query);
@@ -450,10 +552,13 @@ public class DocumentLoader
                 int yMin = rs.getInt("y_min");
                 int xMax = rs.getInt("x_max");
                 int yMax = rs.getInt("y_max");
+                String category = rs.getString("category");
+                String superCat = rs.getString("super_category");
                 if(!boxDict.containsKey(imgID))
                     boxDict.put(imgID, new HashMap<>());
                 boxDict.get(imgID).put(boxID,
-                        new BoundingBox(imgID, boxID, xMin, yMin, xMax, yMax));
+                    new BoundingBox(imgID, boxID, xMin,
+                    yMin, xMax, yMax, category, superCat));
             }
 
             Logger.log("Loading chains from <chain> and associating them with "+
@@ -567,16 +672,19 @@ public class DocumentLoader
         /* The <image> table stores basic image information,
          * like the ID, dimentions, and data split */
         Logger.log("Creating <image>");
-        query = "CREATE TABLE IF NOT EXISTS image (img_id VARCHAR(15), "+
+        query = "CREATE TABLE IF NOT EXISTS image (img_id VARCHAR(20), "+
                 "height INT, width INT, reviewed TINYINT(1), cross_val "+
-                "TINYINT(1), anno_comments TEXT, PRIMARY KEY(img_id));";
+                "TINYINT(1), anno_comments TEXT, img_url TEXT, " +
+                "PRIMARY KEY(img_id));";
         conn.createTable(query);
         query = insertPrefix + "image(img_id, height, width, reviewed, "+
-                "cross_val, anno_comments) VALUES (?, ?, ?, ?, ?, ?);";
+                "cross_val, anno_comments, img_url) "+
+                "VALUES (?, ?, ?, ?, ?, ?, ?);";
         paramSet = new HashSet<>();
         for(Document d : docSet) {
             paramSet.add(new Object[]{d.getID(), d.height,
-                    d.width, d.reviewed, d.crossVal, d.comments});
+                    d.width, d.reviewed, d.crossVal,
+                    d.comments, d.imgURL});
         }
         conn.update(query, paramSet, batchSize, numThreads);
 
@@ -584,7 +692,7 @@ public class DocumentLoader
          * contains the full caption string so we can easily
          * look up captions of various types */
         Logger.log("Creating <caption>");
-        query = "CREATE TABLE IF NOT EXISTS caption (img_id VARCHAR(15), "+
+        query = "CREATE TABLE IF NOT EXISTS caption (img_id VARCHAR(20), "+
                 "caption_idx TINYINT(4), caption TEXT, " +
                 "PRIMARY KEY(img_id, caption_idx));";
         conn.createTable(query);
@@ -599,7 +707,7 @@ public class DocumentLoader
         /* The <token> table contains the core token information,
          * including the text, lemma, and part of speech tag*/
         Logger.log("Creating <token>");
-        query = "CREATE TABLE IF NOT EXISTS token (img_id VARCHAR(15), "+
+        query = "CREATE TABLE IF NOT EXISTS token (img_id VARCHAR(20), "+
                 "caption_idx TINYINT(4), token_idx TINYINT(4), " +
                 "token VARCHAR(50), lemma VARCHAR(50), pos_tag VARCHAR(6), "+
                 "PRIMARY KEY(img_id, caption_idx, token_idx));";
@@ -622,7 +730,7 @@ public class DocumentLoader
         /* The <chunk> table does not contain the chunks themselves, but
          * enables us to organize tokens into chunks */
         Logger.log("Creating <chunk>");
-        query = "CREATE TABLE IF NOT EXISTS chunk (img_id VARCHAR(15), "+
+        query = "CREATE TABLE IF NOT EXISTS chunk (img_id VARCHAR(20), "+
                 "caption_idx TINYINT(4), chunk_idx TINYINT(4), " +
                 "start_token_idx TINYINT(4), end_token_idx TINYINT(4), " +
                 "chunk_type VARCHAR(10), PRIMARY KEY(img_id, "+
@@ -656,7 +764,7 @@ public class DocumentLoader
          * contain mentions, but the indices necessary to build them
          * from tokens */
         Logger.log("Creating <mention>");
-        query = "CREATE TABLE IF NOT EXISTS mention (img_id VARCHAR(15), "+
+        query = "CREATE TABLE IF NOT EXISTS mention (img_id VARCHAR(20), "+
                 "caption_idx TINYINT(4), mention_idx TINYINT(4), " +
                 "start_token_idx TINYINT(4), end_token_idx TINYINT(4), " +
                 "card_str VARCHAR(10), chain_id VARCHAR(10), "+
@@ -686,7 +794,7 @@ public class DocumentLoader
          * (via a single pipe-separated string) as well as
          * specifies whether it should have the scene flag */
         Logger.log("Creating <chain>");
-        query = "CREATE TABLE IF NOT EXISTS chain (img_id VARCHAR(15), "+
+        query = "CREATE TABLE IF NOT EXISTS chain (img_id VARCHAR(20), "+
                 "chain_id VARCHAR(10), assoc_box_ids VARCHAR(50), "+
                 "is_scene TINYINT(1), is_orig_nobox TINYINT(1), "+
                 "PRIMARY KEY(img_id, chain_id));";
@@ -710,17 +818,20 @@ public class DocumentLoader
         /* The <box> table contains the dataset's bounding boxes
          */
         Logger.log("Creating <box>");
-        query = "CREATE TABLE IF NOT EXISTS box (img_id VARCHAR(15), "+
+        query = "CREATE TABLE IF NOT EXISTS box (img_id VARCHAR(20), "+
                 "box_id INT, x_min INT, y_min INT, x_max INT, "+
-                "y_max INT, PRIMARY KEY(img_id, box_id));";
+                "y_max INT, category TEXT, super_category TEXT, "+
+                "PRIMARY KEY(img_id, box_id));";
         conn.createTable(query);
         query = insertPrefix + "box(img_id, box_id, x_min, y_min, " +
-                "x_max, y_max) VALUES (?, ?, ?, ?, ?, ?);";
+                "x_max, y_max, category, super_category) "+
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?);";
         paramSet = new HashSet<>();
         for(Document d : docSet){
             for(BoundingBox b : d.getBoundingBoxSet()){
                 paramSet.add(new Object[]{d.getID(), b.getIdx(), b.getXMin(),
-                        b.getYMin(), b.getXMax(), b.getYMax()});
+                        b.getYMin(), b.getXMax(), b.getYMax(),
+                        b.getCategory(), b.getSuperCategory()});
             }
         }
         conn.update(query, paramSet, batchSize, numThreads);
@@ -730,7 +841,7 @@ public class DocumentLoader
          * the Stanford Dependency parser
          */
         Logger.log("Creating <dependency>");
-        DependencyParser parser = new DependencyParser();
+        StanfordParser parser = new StanfordParser();
         int totalCaps = 0;
         for(Document d : docSet)
             totalCaps += d.getCaptionList().size();
@@ -743,7 +854,7 @@ public class DocumentLoader
                         numCaps, 100.0 * (double)numCaps / totalCaps);
             }
         }
-        query = "CREATE TABLE IF NOT EXISTS dependency (img_id VARCHAR(15), "+
+        query = "CREATE TABLE IF NOT EXISTS dependency (img_id VARCHAR(20), "+
                 "caption_idx TINYINT(4), gov_token_idx TINYINT(4), "+
                 "dep_token_idx TINYINT(4), relation VARCHAR(10), "+
                 "PRIMARY KEY(img_id, caption_idx, gov_token_idx, dep_token_idx));";

@@ -11,8 +11,40 @@ import java.util.List;
  */
 public class StatisticalUtil {
 
-    /**
-     * Returns the maximum value of the given array
+    /**Returns the pointwise mutual information,
+     * specifying whether to normalize the score
+     * to the [-1,1] space
+     *
+     * @param probX
+     * @param probY
+     * @param probXY
+     * @return
+     */
+    public static double computePMI(double probX, double probY, double probXY)
+    {
+        return computePMI(probX, probY, probXY, true);
+    }
+
+    /**We compute normalized PMI as in 'Normalized
+     * (Pointwise) Mutual Information in Collocation
+     * Extraction', where
+     * pmi = ln( P(x,y) / [P(x)P(y)] ) / -ln(P(x,y))
+     *
+     * @param probX
+     * @param probY
+     * @param probXY
+     * @param normalize
+     * @return
+     */
+    public static double computePMI(double probX, double probY, double probXY, boolean normalize)
+    {
+        double pmi = Math.log(probXY) - (Math.log(probX) + Math.log(probY));
+        if(normalize)
+            pmi /= (-1 * Math.log(probXY));
+        return pmi;
+    }
+
+    /**Returns the maximum value of the given array
      *
      * @param arr
      * @return
@@ -25,8 +57,7 @@ public class StatisticalUtil {
         return max;
     }
 
-    /**
-     * Returns the maximum value of the given collection
+    /**Returns the maximum value of the given collection
      *
      * @param coll
      * @return
@@ -36,8 +67,7 @@ public class StatisticalUtil {
         return getMax(coll.toArray(arr));
     }
 
-    /**
-     * Returns the minimum value of the given array
+    /**Returns the minimum value of the given array
      *
      * @param arr
      * @return
@@ -50,8 +80,7 @@ public class StatisticalUtil {
         return min;
     }
 
-    /**
-     * Returns the minimum value of the given collection
+    /**Returns the minimum value of the given collection
      *
      * @param coll
      * @return
@@ -61,8 +90,7 @@ public class StatisticalUtil {
         return getMin(coll.toArray(arr));
     }
 
-    /**
-     * Returns the sum of all elements in the given primitive array
+    /**Returns the sum of all elements in the given primitive array
      *
      * @param arr
      * @return
@@ -74,8 +102,7 @@ public class StatisticalUtil {
         return sum;
     }
 
-    /**
-     * Returns the sum of all elements in the given object array
+    /**Returns the sum of all elements in the given object array
      *
      * @param arr
      * @return
@@ -88,8 +115,7 @@ public class StatisticalUtil {
         return sum;
     }
 
-    /**
-     * Returns the sum of all elements in the given collection
+    /**Returns the sum of all elements in the given collection
      *
      * @param coll
      * @return
@@ -99,8 +125,7 @@ public class StatisticalUtil {
         return getSum(coll.toArray(arr));
     }
 
-    /**
-     * Returns the mean of the values in the given array
+    /**Returns the mean of the values in the given array
      *
      * @param arr - Array of values
      * @return - The mean of <b>arr</b>
@@ -109,8 +134,7 @@ public class StatisticalUtil {
         return getSum(arr) / arr.length;
     }
 
-    /**
-     * Returns the mean of the values in the given collection
+    /**Returns the mean of the values in the given collection
      *
      * @param coll - Collection of values
      * @return - The mean of <b>coll</b>
@@ -120,8 +144,7 @@ public class StatisticalUtil {
         return getMean(coll.toArray(arr));
     }
 
-    /**
-     * Returns the standard deviation of the values in the given array
+    /**Returns the standard deviation of the values in the given array
      *
      * @param arr - Array of values
      * @return - The standard dev of <b>arr</b>
@@ -136,8 +159,7 @@ public class StatisticalUtil {
         return Math.sqrt(total / n);
     }
 
-    /**
-     * Returns the standard deviation of the values in the given collection
+    /**Returns the standard deviation of the values in the given collection
      *
      * @param coll - Collection of values
      * @return - The standard dev of <b>coll</b>

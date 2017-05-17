@@ -179,12 +179,17 @@
         <dependency>
             <groupId>edu.stanford.nlp</groupId>
             <artifactId>stanford-parser</artifactId>
-            <version>3.6.0</version>
+            <version>3.7.0</version>
         </dependency>
         <dependency>
             <groupId>edu.stanford.nlp</groupId>
             <artifactId>stanford-corenlp</artifactId>
-            <version>3.6.0</version>
+            <version>3.7.0</version>
+        </dependency>
+        <dependency>
+            <groupId>edu.stanford.nlp</groupId>
+            <artifactId>stanford-corenlp</artifactId>
+            <version>3.7.0</version>
             <classifier>models</classifier>
         </dependency>
         <!--Databse Connectors-->
@@ -198,5 +203,12 @@
             <artifactId>sqlite-jdbc</artifactId>
             <version>3.8.11.2</version>
         </dependency>
+        <!-- Third Party APIs-->
+        <dependency>
+            <groupId>org.jfree</groupId>
+            <artifactId>jfreechart</artifactId>
+            <version>1.0.14</version>
+        </dependency>
+
     </dependencies>
 </project>

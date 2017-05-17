@@ -1,6 +1,5 @@
 package structures;
 
-import utilities.Logger;
 import utilities.StringUtil;
 
 import java.awt.*;
@@ -21,6 +20,8 @@ public class BoundingBox extends Annotation
     private int _yMax;
     private Rectangle _rec;
     private double _area;
+    private String _category;
+    private String _supercategory;
 
     /**Basic BoundingBox constructor
      *
@@ -32,18 +33,36 @@ public class BoundingBox extends Annotation
     public BoundingBox(String docID, int idx, int xMin,
                        int yMin, int xMax, int yMax)
     {
-        _docID = docID;
-        _idx = idx;
-        _xMin = xMin;
-        _yMin = yMin;
-        _xMax = xMax;
-        _yMax = yMax;
+        _docID = docID; _idx = idx;
+        _xMin = xMin; _yMin = yMin;
+        _xMax = xMax; _yMax = yMax;
         _rec = new Rectangle(xMin, yMin, xMax-xMin, yMax-yMin);
         _area = _rec.getWidth() * _rec.getHeight();
-        if(_area < 0)
-        {
-            Logger.log("WARNING: negative area!");
-        }
+        _category = null; _supercategory = null;
+    }
+
+    /**Bounding box constructor for boxes with categories
+     * and supercategories (as in MSCOCO)
+     *
+     * @param docID
+     * @param idx
+     * @param xMin
+     * @param yMin
+     * @param xMax
+     * @param yMax
+     * @param category
+     * @param superCategory
+     */
+    public BoundingBox(String docID, int idx, int xMin,
+                       int yMin, int xMax, int yMax,
+                       String category, String superCategory)
+    {
+        _docID = docID; _idx = idx;
+        _xMin = xMin; _yMin = yMin;
+        _xMax = xMax; _yMax = yMax;
+        _rec = new Rectangle(xMin, yMin, xMax-xMin, yMax-yMin);
+        _area = _rec.getWidth() * _rec.getHeight();
+        _category = category; _supercategory = superCategory;
     }
 
     /* Getters */
@@ -53,6 +72,8 @@ public class BoundingBox extends Annotation
     public int getYMax(){return _yMax;}
     public Rectangle getRec(){return _rec;}
     public double getArea(){return _area;}
+    public String getCategory(){return _category;}
+    public String getSuperCategory(){return _supercategory;}
 
     /**Returns this bounding box's attributes as a key:value; string
      *

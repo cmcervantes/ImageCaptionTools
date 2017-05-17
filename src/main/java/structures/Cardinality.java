@@ -1,6 +1,7 @@
 package structures;
 
 import utilities.FileIO;
+import utilities.Logger;
 import utilities.StringUtil;
 import utilities.Util;
 
@@ -213,7 +214,7 @@ public class Cardinality implements Serializable
             return new Cardinality(false);
 
         h_lem = h_lem.toLowerCase();
-        String text = StringUtil.listToString(tokens, " ").toLowerCase();
+        String text = StringUtil.listToString(tokens, " ").toLowerCase().trim();
         boolean singularHead = h_pos.equals("NN") || h_pos.equals("NNP");
         boolean pluralHead = h_pos.equals("NNS") || h_pos.equals("NNPS");
         String text_lem = "";
@@ -226,14 +227,19 @@ public class Cardinality implements Serializable
             List<Token> xTokens = new ArrayList<>();
             List<Token> yTokens = new ArrayList<>();
             boolean foundOf = false;
-            for(Token t : tokens){
-                if(t.toString().equals("of"))
+            for(int i=0; i<tokens.size(); i++){
+                Token t = tokens.get(i);
+                if(t.toString().equalsIgnoreCase("of") && i>0 && i<tokens.size()-1)
                     foundOf = true;
                 else if(foundOf)
                     yTokens.add(t);
                 else
                     xTokens.add(t);
             }
+            if(xTokens.isEmpty() || yTokens.isEmpty())
+                Logger.log("ERROR: empty tokens; text:%s; xTokens:%s; yTokens:%s",
+                        text, StringUtil.listToString(xTokens, "|"),
+                        StringUtil.listToString(yTokens, "|"));
 
             Cardinality xCard = parseCardinality(xTokens);
             Cardinality yCard = parseCardinality(yTokens);

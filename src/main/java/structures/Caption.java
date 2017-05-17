@@ -450,8 +450,6 @@ public class Caption extends Annotation {
         return sb.toString();
     }
 
-
-
     /**Returns this caption as an html string where
      * mentions are enclosed in span tags
      *
@@ -555,32 +553,71 @@ public class Caption extends Annotation {
         return sb.toString().trim();
     }
 
-    /**Returns this caption as a coref string (ostensibly for inclusion in a .coref file)
-     *
-     * FORMAT:  [EN/chainID [ChunkType token/POS ] ] [ChunkType token/POS ] ...
-     * Ex.      [PP On/IN ] [EN/0 [NP a/DT bright/JJ sunny/JJ day/NN ] ] ...
+    /**Returns this caption as a coref string (ostensibly for inclusion in a
+     * .coref file); Optional argument tokenChainDict allows mentions to be
+     * re-mapped to chainIDs (necessary during dataset revisions) and optional
+     * argument includeID specifies whether the returned string should be
+     * prefixed with the caption's uniqueID
      *
      * @return
      */
     public String toCorefString()
     {
+        return toCorefString(true);
+    }
+
+    /**Returns this caption as a coref string (ostensibly for inclusion in a
+     * .coref file); Optional argument tokenChainDict allows mentions to be
+     * re-mapped to chainIDs (necessary during dataset revisions) and optional
+     * argument includeID specifies whether the returned string should be
+     * prefixed with the caption's uniqueID
+     *
+     * @param includeID      - Whether to prefix the returned string with uniqueID
+     *                         (true by default)
+     * @return
+     */
+    public String toCorefString(boolean includeID)
+    {
         Map<Integer, String> tokenChainDict = new HashMap<>();
         for(Token t : _tokenList)
             tokenChainDict.put(t.getIdx(), t.chainID);
-        return toCorefString(tokenChainDict);
+        return toCorefString(tokenChainDict, includeID);
     }
 
-    /**Returns this caption as a coref string (ostensibly for inclusion in a .coref file);
-     * Optional argument tokenChainDict allows mentions to be re-mapped to new chainIDs
-     * (necessary during dataset revisions); uses token chainIDs by default
+    /**Returns this caption as a coref string (ostensibly for inclusion in a
+     * .coref file); Optional argument tokenChainDict allows mentions to be
+     * re-mapped to chainIDs (necessary during dataset revisions) and optional
+     * argument includeID specifies whether the returned string should be
+     * prefixed with the caption's uniqueID
      *
      * FORMAT:  [EN/chainID [ChunkType token/POS ] ] [ChunkType token/POS ] ...
      * Ex.      [PP On/IN ] [EN/0 [NP a/DT bright/JJ sunny/JJ day/NN ] ] ...
      *
-     * @param tokenChainDict Mapping of tokens to chainIDs
+     * @param tokenChainDict - Token chain ID assignments (if unspecified, uses
+     *                         the token's internal chain assignments)
      * @return
      */
     public String toCorefString(Map<Integer, String> tokenChainDict)
+    {
+        return toCorefString(tokenChainDict, true);
+    }
+
+    /**Returns this caption as a coref string (ostensibly for inclusion in a
+     * .coref file); Optional argument tokenChainDict allows mentions to be
+     * re-mapped to chainIDs (necessary during dataset revisions) and optional
+     * argument includeID specifies whether the returned string should be
+     * prefixed with the caption's uniqueID
+     *
+     * FORMAT:  [EN/chainID [ChunkType token/POS ] ] [ChunkType token/POS ] ...
+     * Ex.      [PP On/IN ] [EN/0 [NP a/DT bright/JJ sunny/JJ day/NN ] ] ...
+     *
+     * @param tokenChainDict - Token chain ID assignments (if unspecified, uses
+     *                         the token's internal chain assignments)
+     * @param includeID      - Whether to prefix the returned string with uniqueID
+     *                         (true by default)
+     * @return
+     */
+    public String toCorefString(Map<Integer, String> tokenChainDict, boolean includeID)
     {
         StringBuilder sb = new StringBuilder();
         int prevChunkIdx = -1;
@@ -654,18 +691,23 @@ public class Caption extends Annotation {
 
             boolean internalOf = false;
             if(t.chunkType != null && t.chunkType.equals("NP") && t.toString().equals("of")){
+                sb.append("] ");
                 sb.append("[PP ");
                 internalOf = true;
             }
 
             //regardless of what / where we are, add the token
             sb.append(t.toString());
-            sb.append("/");
-            sb.append(t.getPosTag());
+            if(!t.toString().equals("/")){
+                sb.append("/");
+                sb.append(t.getPosTag());
+            }
             sb.append(" ");
 
-            if(internalOf)
+            if(internalOf) {
                 sb.append("] ");
+                sb.append("[NP ");
+            }
 
             //set the previous
             prevChunkIdx = currentChunkIdx;
@@ -676,8 +718,95 @@ public class Caption extends Annotation {
         if(buildingEntity)
             sb.append("] ");
 
+        String corefStr = sb.toString().trim();
+        if(includeID)
+            return getUniqueID() + "\t" + corefStr;
+        return corefStr;
+    }
 
-        return getUniqueID() + "\t" + sb.toString().trim();
+    /**Returns this caption as a pos string (ostensibly for inclusion in a
+     * .pos file); Optional argument includeID specifies whether the
+     * returned string should be prefixed with the caption's uniqueID
+     *
+     * FORMAT:  [ChunkType token/POS ] ] [ChunkType token/POS ] ...
+     * Ex.      [PP On/IN ] [NP a/DT bright/JJ sunny/JJ day/NN ] ...
+     *
+     * @param includeID      - Whether to prefix the returned string with uniqueID
+     *                         (true by default)
+     * @return
+     */
+    public String toCorefString_pos(boolean includeID)
+    {
+        StringBuilder sb = new StringBuilder();
+        int prevChunkIdx = -1;
+        int currentChunkIdx = -1;
+        boolean buildingChunk = false;
+        for(Token t : _tokenList){
+            boolean closeChunk = false;
+            boolean openChunk = false;
+
+            currentChunkIdx = t.chunkIdx;
+            //there are cases where the chunkIdx is valid but
+            //the type has been stripped. In these cases we treat the
+            //chunk as though it's invalid (to prevent it from
+            //being bracketed
+            if(t.chunkType == null || t.chunkType.equalsIgnoreCase("null"))
+                currentChunkIdx = -1;
+
+            //We want to handle three cases
+            //a) We weren't building an chunk, but now we are
+            //b) We were building an chunk, and now we're building a new one
+            //c) We were building an chunk, and now we're not
+            if(currentChunkIdx != prevChunkIdx){
+                if(prevChunkIdx > -1) {
+                    closeChunk = true;
+                    buildingChunk = false;
+                }
+                if(currentChunkIdx > -1) {
+                    openChunk = true;
+                    buildingChunk = true;
+                }
+            }
+
+            //handle these open / close chunk blocks
+            //in order; close prev chunk, start new
+            //new chunk, add text
+            if(closeChunk)
+                sb.append("] ");
+            if(openChunk){
+                sb.append("[");
+                sb.append(t.chunkType);
+                sb.append(" ");
+            }
+
+            boolean internalOf = false;
+            if(t.chunkType != null && t.chunkType.equals("NP") && t.toString().equals("of")){
+                sb.append("] ");
+                sb.append("[PP ");
+                internalOf = true;
+            }
+
+            //regardless of what / where we are, add the token
+            sb.append(t.toString());
+            sb.append("/");
+            sb.append(t.getPosTag());
+            sb.append(" ");
+
+            if(internalOf) {
+                sb.append("] ");
+                sb.append("[NP ");
+            }
+
+            //set the previous
+            prevChunkIdx = currentChunkIdx;
+        }
+        if(buildingChunk)
+            sb.append("] ");
+
+        String posStr = sb.toString().trim();
+        if(includeID)
+            return getUniqueID() + "\t" + posStr;
+        return posStr;
     }
 
     /**Returns this caption as an entities string (ostensibly for inclusion in a .txt
@@ -964,6 +1093,7 @@ public class Caption extends Annotation {
      */
     private void initMentionList()
     {
+        _mentionList = new ArrayList<>();
         int startIdx_chunk = -1;
         int prevEntityIdx = -1;
         for(int i=0; i<_chunkList.size(); i++){
@@ -978,10 +1108,11 @@ public class Caption extends Annotation {
                             _chunkList.subList(startIdx_chunk, _chunkList.size());
                     List<Token> tokenSubList = new ArrayList<>();
                     chunkSubList.stream().forEachOrdered(c -> tokenSubList.addAll(c.getTokenList()));
-                    Mention m = new Mention(_docID, _idx, prevEntityIdx,
-                            tokenSubList.get(0).chainID, tokenSubList, chunkSubList
-                    );
-                    _mentionList.add(m);
+                    if(!tokenSubList.isEmpty()){
+                        Mention m = new Mention(_docID, _idx, prevEntityIdx,
+                                tokenSubList.get(0).chainID, tokenSubList, chunkSubList);
+                        _mentionList.add(m);
+                    }
                     startIdx_chunk = -1;
                 }
 
@@ -995,7 +1126,8 @@ public class Caption extends Annotation {
         }
     }
 
-    /**Loads a Caption from a coref string
+    /**Loads a Caption from a coref string, where the caption
+     * ID is tab-prefixed in the given string
      *
      * @param corefStr
      * @return
@@ -1003,16 +1135,29 @@ public class Caption extends Annotation {
      */
     public static Caption fromCorefStr(String corefStr) throws Exception
     {
-        Caption c = new Caption();
-
         //get the id from the left side of the coref string
         String[] corefStrArr = corefStr.split("\t");
         String[] idArr = corefStrArr[0].split("#");
-        c._docID = idArr[0];
-        c._idx = Integer.parseInt(idArr[1]);
+        return fromCorefStr(corefStrArr[1], idArr[0], Integer.parseInt(idArr[1]));
+    }
+
+    /**Loads a Caption from a coref string; this function assumes
+     * the coref string will NOT have the tab-prefixed ID, requiring
+     * explicit docID and capIdx values
+     *
+     * @param corefStr
+     * @param docID
+     * @param capIdx
+     * @return
+     */
+    public static Caption fromCorefStr(String corefStr, String docID, int capIdx) throws Exception
+    {
+        Caption c = new Caption();
+        c._docID = docID;
+        c._idx = capIdx;
 
         //split the right side of the coref string by spaces
-        String[] captionArr = corefStrArr[1].split(" ");
+        String[] captionArr = corefStr.split(" ");
         int entityCounter = 0;
         int chunkCounter = 0;
         int entityIdx = -1;
@@ -1022,60 +1167,71 @@ public class Caption extends Annotation {
         int tokenIdx_chunkStart = -1;
         int tokenIdx_mentionStart = -1;
         int chunkIdx_start = -1;
-        for(String s : captionArr){
-            if(s.startsWith("[EN")){
+        for(String s : captionArr) {
+            s = s.trim();
+            if (s.startsWith("[EN")) {
                 //if we're building either a chunk or a mention,
                 //we shouldn't be here
-                if(entityIdx > -1 || chunkIdx > -1)
-                    throw new Exception("Unexpected new entity bracket ("+
-                            corefStrArr[0]+")\n" + "Tokens thusfar:\n"+
+                if (entityIdx > -1 || chunkIdx > -1)
+                    throw new Exception("Unexpected new entity bracket (" +
+                            docID + "#" + capIdx + ")\n" + "Tokens thusfar:\n" +
                             StringUtil.listToString(c._tokenList, " "));
                 entityIdx = entityCounter;
                 chainID = s.split("/")[1];
                 tokenIdx_mentionStart = c._tokenList.size();
                 chunkIdx_start = c._chunkList.size();
-            } else if(s.startsWith("[")) {
-                if(chunkIdx > -1){
+            } else if (s.startsWith("[")) {
+                if (chunkIdx > -1) {
                     throw new Exception("Unexpected new chunk bracket (" +
-                            corefStrArr[0]+")\n" + "Tokens thusfar:\n"+
+                            docID + "#" + capIdx + ")\n" + "Tokens thusfar:\n" +
                             StringUtil.listToString(c._tokenList, " "));
                 }
                 chunkType = s.replace("[", "");
                 chunkIdx = chunkCounter;
                 tokenIdx_chunkStart = c._tokenList.size();
-            } else if(s.equals("]")) {
-                if(chunkIdx > -1){
+            } else if (s.equals("]")) {
+                if (chunkIdx > -1) {
                     Chunk ch = new Chunk(c._docID, c._idx, chunkIdx, chunkType,
                             c._tokenList.subList(tokenIdx_chunkStart,
-                            c._tokenList.size()));
+                                    c._tokenList.size()));
                     c._chunkList.add(ch);
                     chunkIdx = -1;
                     chunkType = null;
                     chunkCounter++;
-                } else if(entityIdx > -1) {
-                    Mention m = new Mention(c._docID, c._idx, entityIdx,
-                            chainID, c._tokenList.subList(tokenIdx_mentionStart, c._tokenList.size()), c._chunkList.subList(chunkIdx_start, c._chunkList.size())
-                    );
-                    c._mentionList.add(m);
-                    chainID = null;
-                    entityIdx = -1;
-                    entityCounter++;
+                } else if (entityIdx > -1) {
+                    List<Token> tokenSubList = c._tokenList.subList(tokenIdx_mentionStart, c._tokenList.size());
+                    if(!tokenSubList.isEmpty()){
+                        Mention m = new Mention(c._docID, c._idx, entityIdx,
+                                chainID, tokenSubList, c._chunkList.subList(chunkIdx_start,
+                                c._chunkList.size()));
+                        c._mentionList.add(m);
+                        chainID = null;
+                        entityIdx = -1;
+                        entityCounter++;
+                    }
                 } else {
                     //for some reason we're closing a bracket
                     //we never started
                     throw new Exception("Found unopened closing bracket (" +
-                            corefStrArr[0]+")\n" + "Tokens thusfar:\n"+
+                            docID + "#" + capIdx + ")\n" + "Tokens thusfar:\n" +
                             StringUtil.listToString(c._tokenList, " "));
                 }
-            } else {
+            } else if(!s.isEmpty()) {
                 //if we've reached here, this is a token/POS combo
-                String[] tokenArr = s.split("/");
-                if(tokenArr.length < 2)
-                    throw new Exception("Found token without POS (" +
-                            corefStrArr[0]+")\n" + "Token: " + s);
-                String text = tokenArr[0];
-                String pos = tokenArr[1];
-                String lemma = lemmatizer.getLemma(text, pos);
+                //UPDATE: in a small number of MSCOCO cases, there are additional spaces
+                //that must be removed; skip these
+                String text, pos, lemma;
+                if(s.equals("/")){
+                    text = pos = lemma = s;
+                } else {
+                    String[] tokenArr = s.split("/");
+                    if(tokenArr.length < 2)
+                        throw new Exception("Found token without POS (" +
+                                docID + "#" + capIdx + ")\n" + "Token: " + s);
+                    text = tokenArr[0].trim();
+                    pos = tokenArr[1].trim();
+                    lemma = lemmatizer.getLemma(text, pos).trim();
+                }
                 Token t = new Token(c._docID, c._idx, c._tokenList.size(),
                         text, lemma, chunkIdx, entityIdx, chunkType, pos,
                         chainID);

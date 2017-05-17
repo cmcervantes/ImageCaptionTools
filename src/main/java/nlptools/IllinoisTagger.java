@@ -8,13 +8,14 @@ import edu.illinois.cs.cogcomp.lbjava.nlp.seg.POSBracketToToken;
 import edu.illinois.cs.cogcomp.lbjava.nlp.seg.PlainToTokenParser;
 import edu.illinois.cs.cogcomp.lbjava.nlp.seg.Token;
 import edu.illinois.cs.cogcomp.lbjava.parse.Parser;
+import edu.illinois.cs.cogcomp.nlp.lemmatizer.IllinoisLemmatizer;
 import utilities.DoubleDict;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-/** The Tagger wraps the Illinois CogComp part-of-speech
+/** The IllinoisTagger wraps the Illinois CogComp part-of-speech
  * tagger for use with our structures
  *
  *                  Train       | Test      | Accuracy
@@ -23,18 +24,19 @@ import java.util.List;
  *               :  00-21       | old dev   | 95.39
  *               :  00-21+train | old dev   | 97.92
  */
-public class Tagger
+public class IllinoisTagger
 {
+    private IllinoisLemmatizer _lemmatizer;
     private POSTaggerKnown _posTaggerKnown;
     private POSTaggerUnknown _posTaggerUnknown;
     wordForm __wordForm;
 
-    /**Constructs a Tagger from a pre-trained model
+    /**Constructs a IllinoisTagger from a pre-trained model
      * specified by modelDir
      *
      * @param modelDir
      */
-    public Tagger(String modelDir)
+    public IllinoisTagger(String modelDir)
     {
         _posTaggerKnown =
                 new POSTaggerKnown(modelDir + "pos_known.lc",
@@ -43,6 +45,7 @@ public class Tagger
                 new POSTaggerUnknown(modelDir + "pos_unk.lc",
                         modelDir + "pos_unk.lex");
         __wordForm = new wordForm();
+        _lemmatizer = new IllinoisLemmatizer();
     }
 
     /**Returns an array of predicted part-of-speech tags for
@@ -77,6 +80,7 @@ public class Tagger
         Token t = (Token)parser.next();
         while(t != null){
             t.partOfSpeech = predict(t);
+            t.lemma = _lemmatizer.getLemma(t.form, t.partOfSpeech);
             tokenList.add(t);
             t = (Token)parser.next();
         }
@@ -100,7 +104,7 @@ public class Tagger
         return predTag;
     }
 
-    /**Evaluates this Tagger using the given testFile
+    /**Evaluates this IllinoisTagger using the given testFile
      *
      * @param testFile
      */
@@ -144,7 +148,7 @@ public class Tagger
         System.out.println("total: " + wordTagCountDict.getSum());
     }
 
-    /**Trains a new Tagger model, using the given trainingData,
+    /**Trains a new IllinoisTagger model, using the given trainingData,
      * and stores the model files to the given modelsDir
      *
      * @param trainingData

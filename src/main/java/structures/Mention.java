@@ -1,6 +1,7 @@
 package structures;
 
 import utilities.FileIO;
+import utilities.Logger;
 import utilities.StringUtil;
 
 import java.util.*;
@@ -112,6 +113,10 @@ public class Mention extends Annotation
                       List<Chunk> chunkList, String lexicalType,
                       Cardinality card)
     {
+        if(tokenList.isEmpty())
+            Logger.log(new Exception("No tokens found for doc:" +
+                       docID + ";cap:" + captionIdx + ";idx:" +idx));
+
         _docID = docID;
         _captionIdx = captionIdx;
         _idx = idx;
@@ -125,11 +130,10 @@ public class Mention extends Annotation
             initLexicalType();
         else
             _lexType = lexicalType;
-        if(card == null){
+        if(card == null)
             _card = Cardinality.parseCardinality(_tokenList);
-        } else {
+        else
             _card = card;
-        }
     }
 
     /**Initializes this mention's lexical type, assuming the static
@@ -538,15 +542,17 @@ public class Mention extends Annotation
          */
         public static PRONOUN_TYPE parseType(String s)
         {
-            String normText = s.toLowerCase().trim();
+            if(s != null){
+                String normText = s.toLowerCase().trim();
 
-            //since it and that don't have unique types, set them as special
-            if(normText.equals("it") || normText.equals("that"))
-                return OTHER;
+                //since it and that don't have unique types, set them as special
+                if(normText.equals("it") || normText.equals("that"))
+                    return OTHER;
 
-            for(PRONOUN_TYPE t : PRONOUN_TYPE.values())
-                if(typeWordSetDict.get(t).contains(normText))
-                    return t;
+                for(PRONOUN_TYPE t : PRONOUN_TYPE.values())
+                    if(typeWordSetDict.get(t).contains(normText))
+                        return t;
+            }
             return NONE;
         }
 

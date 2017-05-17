@@ -14,18 +14,19 @@ import java.util.List;
  */
 public class Document
 {
-    private static final String PTRN_APPOS = "^NP , (NP (VP |ADJP |PP |and )*)+,.*$";
-    private static final String PTRN_LIST = "^NP , (NP ,?)* and NP.*$";
+    protected static final String PTRN_APPOS = "^NP , (NP (VP |ADJP |PP |and )*)+,.*$";
+    protected static final String PTRN_LIST = "^NP , (NP ,?)* and NP.*$";
 
-    private String _ID;
-    private Map<String, Chain> _chainDict;
-    private List<Caption> _captionList;
+    protected String _ID;
+    protected Map<String, Chain> _chainDict;
+    protected List<Caption> _captionList;
 
     public int height;
     public int width;
     public int crossVal;
     public boolean reviewed;
     public String comments;
+    public String imgURL;
 
     /**Document constructor used for loading Documents from
      * a pair of sentence / annotation files
@@ -67,7 +68,7 @@ public class Document
      *
      * @param corefStrings
      */
-    public Document(Set<String> corefStrings)
+    public Document(List<String> corefStrings)
     {
         _captionList = new ArrayList<>();
         try{
@@ -93,6 +94,14 @@ public class Document
     public Document(String ID)
     {
         _ID = ID;
+        _chainDict = new HashMap<>();
+        _captionList = new ArrayList<>();
+        reviewed = false;
+        crossVal = -1;
+    }
+
+    protected Document()
+    {
         _chainDict = new HashMap<>();
         _captionList = new ArrayList<>();
         reviewed = false;
@@ -319,11 +328,10 @@ public class Document
      */
     public void addBoundingBox(BoundingBox b, Collection<String> assocChainIDs)
     {
-        for(String chainID : assocChainIDs){
+        for(String chainID : assocChainIDs)
             for(Chain c :_chainDict.values())
                 if(c.getID().equals(chainID))
                     c.addBoundingBox(b);
-        }
     }
 
     /**Adds the given Caption to the internal list

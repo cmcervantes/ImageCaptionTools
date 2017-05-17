@@ -16,16 +16,16 @@ import java.util.ArrayList;
 import java.util.List;
 
 
-public class Chunker
+public class IllinoisChunker
 {
     edu.illinois.cs.cogcomp.lbj.chunk.Chunker chunker;
 
-    /**Constructs a Chunker from a pre-trained model
+    /**Constructs a IllinoisChunker from a pre-trained model
      * specified by modelDir
      *
      * @param modelDir
      */
-    public Chunker(String modelDir)
+    public IllinoisChunker(String modelDir)
     {
         chunker = new edu.illinois.cs.cogcomp.lbj.chunk.Chunker(
                     modelDir + "chunk.lc", modelDir + "chunk.lex");
@@ -71,7 +71,7 @@ public class Chunker
     }
 
     /**Given a set of Illinois.CogComp tokens (such as those
-     * produced by Tagger.predict ) and the docID / capIdx,
+     * produced by IllinoisTagger.predict ) and the docID / capIdx,
      * returns a Caption (from our structure)
      *
      * @param toks
@@ -137,7 +137,7 @@ public class Chunker
         return c;
     }
 
-    /**Trains a new Chunker model for numIter iterations,
+    /**Trains a new IllinoisChunker model for numIter iterations,
      * using the given trainingData, and stores the model
      * files to the given modelsDir
      *

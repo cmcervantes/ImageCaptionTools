@@ -13,14 +13,14 @@ import java.util.List;
  * (default model)
  *
  */
-public class DependencyParser
+public class StanfordParser
 {
     edu.stanford.nlp.parser.nndep.DependencyParser _parser;
 
     /**Constructs a new dependency parser using
      * the default model
      */
-    public DependencyParser()
+    public StanfordParser()
     {
         _parser = edu.stanford.nlp.parser.nndep.DependencyParser.loadFromModelFile(
                 edu.stanford.nlp.parser.nndep.DependencyParser.DEFAULT_MODEL);

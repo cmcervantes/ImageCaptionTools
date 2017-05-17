@@ -14,25 +14,19 @@ import java.util.*;
  */
 public class HtmlIO
 {
-    private static final String _imgSrcRoot =
-            "http://shannon.cs.illinois.edu/DenotationGraph/graph/flickr30k-images/";
     private static final String[] _colors = {"red", "blue", "green",
             "darkorchid", "teal", "saddlebrown", "mediumvioletred",
             "darkkhaki", "darkslategray", "darkolivegreen", "olivedrab",
             "chocolate"};
 
-
     public static String getImgHtm(Document d)
     {
-        //get the image source
-        String imgSrc = _imgSrcRoot + d.getID();
-
         //build the row, enclosing it in a table
         //so as not to throw off any formatting
         StringBuilder sb = new StringBuilder();
         sb.append("<td><table><tr><td>");
         sb.append(String.format("<img src=\"%s\" height=\"%d\" width=\"%d\"/><br/>",
-                imgSrc, d.height, d.width));
+                d.imgURL, d.height, d.width));
         sb.append("Image: <em>");
         sb.append(d.getID());
         sb.append("</em>");
@@ -50,15 +44,12 @@ public class HtmlIO
 
     public static String getImgHtm(Document d, Set<Chain> predChainSet, Set<Chain[]> subsetPairs)
     {
-        //get the image source
-        String imgSrc = _imgSrcRoot + d.getID();
-
         //build the row, enclosing it in a table
         //so as not to throw off any formatting
         StringBuilder sb = new StringBuilder();
         sb.append("<td><table><tr><td>");
         sb.append(String.format("<img src=\"%s\" height=\"%d\" width=\"%d\"/><br/>",
-                imgSrc, d.height, d.width));
+                d.imgURL, d.height, d.width));
         sb.append("Image: <em>");
         sb.append(d.getID());
         sb.append("</em>");

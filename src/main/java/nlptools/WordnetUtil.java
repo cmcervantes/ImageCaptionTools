@@ -55,6 +55,38 @@ public class WordnetUtil
         wnStemmer = new WordnetStemmer(wordnetDict);
     }
 
+    /**Returns whether any of the senses in the hypernym
+     * tree of lemma_i is a meronym of any of the senses in
+     * the hypernym tree of lemma_j
+     *
+     * @param lemma_i
+     * @param lemma_j
+     * @return
+     */
+    public boolean isMeronym(String lemma_i, String lemma_j)
+    {
+        HypTree hyps_i = getHypernymTree(lemma_i);
+        HypTree hyps_j = getHypernymTree(lemma_j);
+        Set<ISynset> senses_i = hyps_i.getAllSenses();
+        Set<ISynset> senses_j = hyps_j.getAllSenses();
+
+        for(ISynset sense_i : senses_i){
+            //List<String> meroIDs = new HashSet<>();
+            //for(ISynsetID meroID : sense_i.getRelatedSynsets(Pointer.MERONYM_PART))
+
+            List<ISynsetID> meroIDs =
+                    new ArrayList<>(sense_i.getRelatedSynsets(Pointer.MERONYM_PART));
+            meroIDs.addAll(new ArrayList<>(sense_i.getRelatedSynsets(Pointer.MERONYM_MEMBER)));
+            for(ISynset sense_j : senses_j)
+                for(ISynsetID meroID : meroIDs)
+                    if(meroID.equals(sense_j.getID()))
+                        return true;
+        }
+
+        return false;
+    }
+
+
     /**Returns the hypernym tree for this lemma, where a sense
      * is retained if its frequency count is greater than 0 or
      * -- if no such sense is present -- the first sense is taken;
@@ -108,6 +140,52 @@ public class WordnetUtil
     {
         //Add the hypernyms of this synset to the tree and recurse
         for(ISynsetID hypID : synset.getRelatedSynsets(Pointer.HYPERNYM)){
+            ISynset hypSyn = wordnetDict.getSynset(hypID);
+            IWord hypWord = hypSyn.getWords().get(0);
+            int tagCount = wordnetDict.getSenseEntry(hypWord.getSenseKey()).getTagCount();
+            HypTree.HypNode node = tree.addChild(hypSyn, lastNode, tagCount);
+            buildHypernymTree(hypSyn, node, tree);
+        }
+    }
+
+    public HypTree getHyponymTree(String lemma)
+    {
+        HypTree tree = new HypTree(lemma);
+
+        //iterate over all the stems of this lemma
+        for(String stem : wnStemmer.findStems(lemma, POS.NOUN)) {
+            IIndexWord idxWord = wordnetDict.getIndexWord(stem, POS.NOUN);
+
+            if (idxWord != null) {
+                //We keep only those senses that have frequency counts > 0;
+                //If no frequency counts are greater than 0; take only the
+                //first sense
+                List<IWordID> wordIDs = new ArrayList<>();
+                for (IWordID wordID : idxWord.getWordIDs()) {
+                    IWord word = wordnetDict.getWord(wordID);
+                    if (wordnetDict.getSenseEntry(word.getSenseKey()).getTagCount() > 0)
+                        wordIDs.add(wordID);
+                }
+                if (wordIDs.isEmpty())
+                    wordIDs.add(idxWord.getWordIDs().get(0));
+                wordIDs = wordIDs.subList(0, Math.min(3, wordIDs.size()));
+                for (IWordID wordID : wordIDs) {
+                    IWord word = wordnetDict.getWord(wordID);
+                    int tagCount = wordnetDict.getSenseEntry(word.getSenseKey()).getTagCount();
+                    ISynset synset = word.getSynset();
+                    HypTree.HypNode node = tree.addChild(synset, null, tagCount);
+                    _buildHyponymTree(synset, node, tree);
+                }
+            }
+        }
+
+        return tree;
+    }
+
+    private void _buildHyponymTree(ISynset synset, HypTree.HypNode lastNode, HypTree tree)
+    {
+        //Add the hypernyms of this synset to the tree and recurse
+        for(ISynsetID hypID : synset.getRelatedSynsets(Pointer.HYPONYM)){
             ISynset hypSyn = wordnetDict.getSynset(hypID);
             IWord hypWord = hypSyn.getWords().get(0);
             int tagCount = wordnetDict.getSenseEntry(hypWord.getSenseKey()).getTagCount();

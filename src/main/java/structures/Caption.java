@@ -689,12 +689,13 @@ public class Caption extends Annotation {
                 sb.append(" ");
             }
 
+            /*
             boolean internalOf = false;
             if(t.chunkType != null && t.chunkType.equals("NP") && t.toString().equals("of")){
                 sb.append("] ");
                 sb.append("[PP ");
                 internalOf = true;
-            }
+            }*/
 
             //regardless of what / where we are, add the token
             sb.append(t.toString());
@@ -704,10 +705,11 @@ public class Caption extends Annotation {
             }
             sb.append(" ");
 
+            /*
             if(internalOf) {
                 sb.append("] ");
                 sb.append("[NP ");
-            }
+            }*/
 
             //set the previous
             prevChunkIdx = currentChunkIdx;
@@ -1052,14 +1054,13 @@ public class Caption extends Annotation {
     private void initChunkList()
     {
         _chunkList = new ArrayList<>();
+        /*
         int prevChunkIdx = -1;
-        int prevEntityIdx = -1;
         String prevChunkType = null;
         List<Token> chunkTokenList = new ArrayList<>();
         for(int tIdx=0; tIdx < _tokenList.size(); tIdx++) {
             Token t = _tokenList.get(tIdx);
             int currentChunkIdx = t.chunkIdx;
-            int currentEntityIdx = t.mentionIdx;
             String currentChunkType = t.chunkType;
 
             //this token is part of the currently in-progress
@@ -1086,7 +1087,35 @@ public class Caption extends Annotation {
 
             prevChunkIdx = currentChunkIdx;
             prevChunkType = currentChunkType;
+        }*/
+
+        //Though this isn't the most efficient way
+        //to do this, it's the safest to avoid
+        //weird off-by-one issues; store the min/max
+        //indices for each chunk index along with
+        //chunk type
+        Map<Integer, Integer[]> chunkTokenDict = new HashMap<>();
+        Map<Integer, String> chunkTypeDict = new HashMap<>();
+        for(Token t : _tokenList){
+            int chunkIdx = t.chunkIdx;
+            String chunkType = t.chunkType;
+            if(chunkIdx != -1){
+                if(!chunkTokenDict.containsKey(chunkIdx)){
+                    chunkTokenDict.put(chunkIdx, new Integer[]{Integer.MAX_VALUE, Integer.MIN_VALUE});
+                    chunkTypeDict.put(chunkIdx, chunkType);
+                }
+                Integer[] indices = chunkTokenDict.get(chunkIdx);
+                if(t.getIdx() < indices[0])
+                    indices[0] = t.getIdx();
+                if(t.getIdx() > indices[1])
+                    indices[1] = t.getIdx();
+            }
         }
+        List<Integer> chunkIndices = new ArrayList<>(chunkTokenDict.keySet());
+        Collections.sort(chunkIndices);
+        for(int chunkIdx : chunkIndices)
+            this.addChunk(chunkIdx, chunkTypeDict.get(chunkIdx),
+                    chunkTokenDict.get(chunkIdx)[0], chunkTokenDict.get(chunkIdx)[1]);
     }
 
     /**Initializes the internal mention list from the token and chunk lists
@@ -1094,6 +1123,7 @@ public class Caption extends Annotation {
     private void initMentionList()
     {
         _mentionList = new ArrayList<>();
+        /*
         int startIdx_chunk = -1;
         int prevEntityIdx = -1;
         for(int i=0; i<_chunkList.size(); i++){
@@ -1123,7 +1153,31 @@ public class Caption extends Annotation {
             }
 
             prevEntityIdx = entityIdx;
+        }*/
+
+        Map<Integer, Integer[]> mentionTokenDict = new HashMap<>();
+        Map<Integer, String> mentionChainDict = new HashMap<>();
+        for(Token t : _tokenList){
+            int mentionIdx = t.mentionIdx;
+            String chainID = t.chainID;
+            if(mentionIdx != -1){
+                if(!mentionTokenDict.containsKey(mentionIdx)){
+                    mentionTokenDict.put(mentionIdx, new Integer[]{Integer.MAX_VALUE, Integer.MIN_VALUE});
+                    mentionChainDict.put(mentionIdx, chainID);
+                }
+                Integer[] indices = mentionTokenDict.get(mentionIdx);
+                if(t.getIdx() < indices[0])
+                    indices[0] = t.getIdx();
+                if(t.getIdx() > indices[1])
+                    indices[1] = t.getIdx();
+            }
         }
+        List<Integer> mentionIndices = new ArrayList<>(mentionTokenDict.keySet());
+        Collections.sort(mentionIndices);
+        for(int mentionIdx : mentionIndices)
+            this.addMention(mentionIdx, null, mentionChainDict.get(mentionIdx),
+                    null, mentionTokenDict.get(mentionIdx)[0],
+                    mentionTokenDict.get(mentionIdx)[1]);
     }
 
     /**Loads a Caption from a coref string, where the caption
@@ -1186,7 +1240,13 @@ public class Caption extends Annotation {
                             docID + "#" + capIdx + ")\n" + "Tokens thusfar:\n" +
                             StringUtil.listToString(c._tokenList, " "));
                 }
+
+                //Drop the special chunk types from the DenotationGraph
+                //pipeline
                 chunkType = s.replace("[", "");
+                if(chunkType.contains("/"))
+                    chunkType = chunkType.split("/")[0];
+
                 chunkIdx = chunkCounter;
                 tokenIdx_chunkStart = c._tokenList.size();
             } else if (s.equals("]")) {

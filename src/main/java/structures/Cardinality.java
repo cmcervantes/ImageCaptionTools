@@ -70,7 +70,12 @@ public class Cardinality implements Serializable
      */
     public Cardinality(String s) throws Exception
     {
-        if(s.equals("m")) {
+        if(s == null){
+            _isMass = false;
+            _isNull = true;
+            _baseValues = new int[]{-1,-1};
+            _underdef = new boolean[]{true, true};
+        } else if(s.equals("m")) {
             _isMass = true;
             _isNull = false;
             _baseValues = new int[]{-1,-1};

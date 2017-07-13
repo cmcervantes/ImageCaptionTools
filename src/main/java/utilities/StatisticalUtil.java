@@ -2,6 +2,7 @@ package utilities;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Set;
 
 /**The StatisticalUtil class houses static functions that perform
  * various statistical tasks, such as finding the mean and standard
@@ -11,38 +12,7 @@ import java.util.List;
  */
 public class StatisticalUtil {
 
-    /**Returns the pointwise mutual information,
-     * specifying whether to normalize the score
-     * to the [-1,1] space
-     *
-     * @param probX
-     * @param probY
-     * @param probXY
-     * @return
-     */
-    public static double computePMI(double probX, double probY, double probXY)
-    {
-        return computePMI(probX, probY, probXY, true);
-    }
-
-    /**We compute normalized PMI as in 'Normalized
-     * (Pointwise) Mutual Information in Collocation
-     * Extraction', where
-     * pmi = ln( P(x,y) / [P(x)P(y)] ) / -ln(P(x,y))
-     *
-     * @param probX
-     * @param probY
-     * @param probXY
-     * @param normalize
-     * @return
-     */
-    public static double computePMI(double probX, double probY, double probXY, boolean normalize)
-    {
-        double pmi = Math.log(probXY) - (Math.log(probX) + Math.log(probY));
-        if(normalize)
-            pmi /= (-1 * Math.log(probXY));
-        return pmi;
-    }
+    /* Simple arithmatic functions (gets) */
 
     /**Returns the maximum value of the given array
      *
@@ -169,6 +139,41 @@ public class StatisticalUtil {
         return getStdDev(coll.toArray(arr));
     }
 
+    /* Complex Functions (computes) */
+
+    /**Returns the pointwise mutual information,
+     * specifying whether to normalize the score
+     * to the [-1,1] space
+     *
+     * @param probX
+     * @param probY
+     * @param probXY
+     * @return
+     */
+    public static double computePMI(double probX, double probY, double probXY)
+    {
+        return computePMI(probX, probY, probXY, true);
+    }
+
+    /**We compute normalized PMI as in 'Normalized
+     * (Pointwise) Mutual Information in Collocation
+     * Extraction', where
+     * pmi = ln( P(x,y) / [P(x)P(y)] ) / -ln(P(x,y))
+     *
+     * @param probX
+     * @param probY
+     * @param probXY
+     * @param normalize
+     * @return
+     */
+    public static double computePMI(double probX, double probY, double probXY, boolean normalize)
+    {
+        double pmi = Math.log(probXY) - (Math.log(probX) + Math.log(probY));
+        if(normalize)
+            pmi /= (-1 * Math.log(probXY));
+        return pmi;
+    }
+
     /**Returns the root mean squared error of the two lists, where
      * the items are assumed to be in the same order (so the
      * distance is (pred[i] - gold[i])^2)
@@ -178,10 +183,10 @@ public class StatisticalUtil {
      * @return      - The root mean squared error or null if the
      *                lists are of different lengths
      */
-    public static Double getRMSE(List<Double> pred, List<Double> gold)
+    public static Double computeRMSE(List<Double> pred, List<Double> gold)
     {
         Double[] predArr = new Double[pred.size()], goldArr = new Double[gold.size()];
-        return getRMSE(pred.toArray(predArr), gold.toArray(goldArr));
+        return computeRMSE(pred.toArray(predArr), gold.toArray(goldArr));
     }
 
     /**Returns the root mean squared error of the two arrays, where
@@ -193,7 +198,7 @@ public class StatisticalUtil {
      * @return      - The root mean squared error or null if the
      *                arrays are of different lengths
      */
-    public static Double getRMSE(Double[] pred, Double[] gold)
+    public static Double computeRMSE(Double[] pred, Double[] gold)
     {
         if(pred.length != gold.length)
             return null;
@@ -208,5 +213,31 @@ public class StatisticalUtil {
         //rmse /= getMean(gold);
 
         return rmse;
+    }
+
+    /**Computes the KL-Divergence from the given Q distribution to the
+     * P distribution; this asymmetric measure produces 0 when the
+     * two distributions are expected to produce the same reasults and
+     * produces 1 when the distributions are completely different
+     *
+     * @param qDistro
+     * @param pDistro
+     * @param <T>
+     * @return
+     */
+    public static <T> Double computeKLDivergence(DoubleDict<T> qDistro, DoubleDict<T> pDistro)
+    {
+        //Return null if there's a pDistro key that doesn't appear in q
+        Set<T> pKeys = pDistro.keySet();
+        for(T key : pKeys)
+            if(!qDistro.keySet().contains(key))
+                return null;
+
+        //Now that we know each of the pDistro keys, compute KL divergence
+        double klDiv = 0;
+        for(T key : pKeys)
+            klDiv += pDistro.get(key) *
+                    (Math.log(pDistro.get(key)) - Math.log(qDistro.get(key)));
+        return klDiv;
     }
 }

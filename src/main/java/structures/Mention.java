@@ -29,8 +29,11 @@ public class Mention extends Annotation
         _numerics = new HashSet<>(Arrays.asList(numericArr));
     }
 
-    //Lexicon dict, initialized with initLexiconDict
-    private static Map<String, String> _lexiconDict;
+    //Lexicon dict, initialized with initializeDict
+    private static Map<String, String> _flickr30kLexicon;
+    private static Map<String, Set<String>> _cocoLexicon;
+    private static Map<String, Set<String>> _cocoLexicon_fallback;
+    private static Map<String, String> _supercategoryDict;
 
     //member variables, set internally or during creation
     private int _captionIdx;
@@ -139,8 +142,7 @@ public class Mention extends Annotation
     /**Initializes this mention's lexical type, assuming the static
      * lexiconDict has been initialized already
      */
-    private void initLexicalType()
-    {
+    private void initLexicalType() {
         String type = "other";
 
         //Handle non-pronominal mentions and pronouns
@@ -156,9 +158,9 @@ public class Mention extends Annotation
             _tokenList.stream().forEachOrdered(t -> lemmas.add(t.getLemma()));
             String lemmaStr = StringUtil.listToString(lemmas, " ");
 
-            for (String s : _lexiconDict.keySet()) {
+            for (String s : _flickr30kLexicon.keySet()) {
                 if (s.length() >= matchLength && lemmaStr.endsWith(s)) {
-                    type = _lexiconDict.get(s);
+                    type = _flickr30kLexicon.get(s);
                     matchLength = s.length();
                 }
             }
@@ -269,6 +271,10 @@ public class Mention extends Annotation
                 normLemma.equals("himself") || normText.contains(" male ") ||
                 normLemma.equals("guy"))
             return "male";
+        else if(_tokenList.size() > 1 && normText.contains(" her "))
+            return "female";
+        else if(_tokenList.size() > 1 && normText.contains(" his "))
+            return "male";
         return "neuter";
     }
 
@@ -343,41 +349,184 @@ public class Mention extends Annotation
         return 0.0;
     }
 
-    /**Function to initialize static lexicon dict;
-     * Intended to be populated only when needed,
-     * as the standard workflow should not have to
-     * build mentions from scratch
+    /**Initializes static lexicon dictionaries; intended to be
+     * populated only when needed as the standard workflow
+     * should not have to build mentions from scratch
+     *
+     * @param cocoLexFile
+     * @param flickr30kLexiconDir
      */
-    public static void initLexiconDict(String lexiconRoot)
+    public static void initializeLexicons(String flickr30kLexiconDir, String cocoLexFile)
     {
-        String[] types = {"animals", "bodyparts", "clothing",
-                "colors", "instruments", "people",
-                "scene", "vehicles"};
-        Map<String, Set<String>> lemmaTypeSetDict = new HashMap<>();
-        for(String type : types){
-            List<String> lineList = FileIO.readFile_lineList(lexiconRoot + type + ".txt");
-            for(String lemma : lineList){
-                if(!lemmaTypeSetDict.containsKey(lemma))
-                    lemmaTypeSetDict.put(lemma, new HashSet<>());
-                lemmaTypeSetDict.get(lemma).add(type);
+        _flickr30kLexicon = new HashMap<>();
+        _cocoLexicon = new HashMap<>();
+        _cocoLexicon_fallback = new HashMap<>();
+        _supercategoryDict = new HashMap<>();
+
+        //Load the flickr30k lexicon
+        if(flickr30kLexiconDir != null){
+            String[] types = {"animals", "bodyparts", "clothing",
+                    "colors", "instruments", "people",
+                    "scene", "vehicles"};
+            Map<String, Set<String>> lemmaTypeSetDict = new HashMap<>();
+            for(String type : types){
+                List<String> lineList = FileIO.readFile_lineList(flickr30kLexiconDir + type + ".txt");
+                for(String lemma : lineList){
+                    if(!lemmaTypeSetDict.containsKey(lemma))
+                        lemmaTypeSetDict.put(lemma, new HashSet<>());
+                    lemmaTypeSetDict.get(lemma).add(type);
+                }
+            }
+            _flickr30kLexicon = new HashMap<>();
+            for(String lemma : lemmaTypeSetDict.keySet())
+                _flickr30kLexicon.put(lemma, StringUtil.listToString(lemmaTypeSetDict.get(lemma), "/"));
+        }
+
+        //Load the coco lexicon file
+        if(cocoLexFile != null){
+            String[][] cocoLexTable = FileIO.readFile_table(cocoLexFile);
+            for(String[] row : cocoLexTable){
+                String cat = row[0];
+                String[] heads = row[1].split("\\|");
+                String[] fallbacks = row[2].split("\\|");
+                String superCat = row[3];
+                _cocoLexicon.put(cat, new HashSet<>(Arrays.asList(heads)));
+                _cocoLexicon_fallback.put(cat, new HashSet<>(Arrays.asList(fallbacks)));
+                _supercategoryDict.put(cat, superCat);
             }
         }
-        _lexiconDict = new HashMap<>();
-        for(String lemma : lemmaTypeSetDict.keySet())
-            _lexiconDict.put(lemma, StringUtil.listToString(lemmaTypeSetDict.get(lemma), "/"));
     }
 
-    /**Returns the lexical type entry for the given lemma
+    /**Returns the lexical type entry for the given lemma;
+     * returns less-precise results than the version
+     * that takes a mention; returns 'other' if the lemma
+     * is not found; returns multiple types deliniated
+     * with /
      *
      * @param lemma
      * @return
      */
-    public static String getLexicalEntry(String lemma)
+    public static String getLexicalEntry_flickr(String lemma)
     {
-        if(_lexiconDict.containsKey(lemma))
-            return _lexiconDict.get(lemma);
+        if(_flickr30kLexicon.containsKey(lemma))
+            return _flickr30kLexicon.get(lemma);
         return "other";
     }
+
+    /**Returns the lexical type entry for the given mention;
+     * returns 'other' if the head word(s) is not found;
+     * returns multiple types deliniated with /
+     *
+     * @param m
+     * @return
+     */
+    public static String getLexicalEntry_flickr(Mention m)
+    {
+        List<Token> toks = m.getTokenList();
+        String head = toks.get(toks.size()-1).getLemma().toLowerCase();
+        String lastTwo = "";
+        if(toks.size() > 1)
+            lastTwo = toks.get(toks.size()-2).getLemma() + " ";
+        lastTwo += toks.get(toks.size()-1).getLemma();
+        lastTwo = lastTwo.toLowerCase();
+
+        if(_flickr30kLexicon.containsKey(lastTwo))
+            return _flickr30kLexicon.get(lastTwo);
+        else if(_flickr30kLexicon.containsKey(head))
+            return _flickr30kLexicon.get(head);
+        return "other";
+    }
+
+    /**Returns the lexical type entry for the given lemma
+     * according to the MSCOCO lexicons; returns a less
+     * precise results than the version that takes a mention;
+     * returns null if the lemma is not found; returns multiple
+     * categories deliniated with /
+     *
+     * @param lemma
+     * @param includeFallback
+     * @return
+     */
+    public static String getLexicalEntry_cocoCategory(String lemma, boolean includeFallback)
+    {
+        Set<String> categories = new HashSet<>();
+        for(String category : _cocoLexicon.keySet()) {
+            if (_cocoLexicon.get(category).contains(lemma))
+                categories.add(category);
+            else if(includeFallback && _cocoLexicon_fallback.get(category).contains(lemma))
+                categories.add(category);
+        }
+
+        //Treat anything in our people lexicon as a fallback person category
+        if(includeFallback && getLexicalEntry_flickr(lemma).contains("people"))
+            categories.add("person");
+
+        if(categories.isEmpty())
+            return null;
+        List<String> categoryList = new ArrayList<>(categories);
+        return StringUtil.listToString(categoryList, "/");
+    }
+
+    /**Returns the lexical type entry for the given mention
+     * according to the mscoco lexicons; returns null if
+     * the head word(s) is not found; returns multiple
+     * types deliniated with /
+     *
+     * @param m
+     * @param includeFallback
+     * @return
+     */
+    public static String getLexicalEntry_cocoCategory(Mention m, boolean includeFallback)
+    {
+        List<Token> toks = m.getTokenList();
+        String head = toks.get(toks.size()-1).getLemma().toLowerCase();
+        String lastTwo = "";
+        if(toks.size() > 1)
+            lastTwo = toks.get(toks.size()-2).getLemma() + " ";
+        lastTwo += toks.get(toks.size()-1).getLemma();
+        lastTwo = lastTwo.toLowerCase();
+
+        Set<String> categories = new HashSet<>();
+        for(String category : _cocoLexicon.keySet()) {
+            if (_cocoLexicon.get(category).contains(head) ||
+                _cocoLexicon.get(category).contains(lastTwo))
+                categories.add(category);
+            else if(includeFallback && (_cocoLexicon_fallback.get(category).contains(head) ||
+                _cocoLexicon_fallback.get(category).contains(lastTwo)))
+                categories.add(category);
+        }
+
+        //Treat anything in our people lexicon as a fallback person category
+        if(includeFallback && getLexicalEntry_flickr(m).contains("people"))
+            categories.add("person");
+
+        if(categories.isEmpty())
+            return null;
+        List<String> categoryList = new ArrayList<>(categories);
+        return StringUtil.listToString(categoryList, "/");
+    }
+
+    /**Returns the MSCOCO supercategory, given a category
+     *
+     * @param category
+     * @return
+     */
+    public static String getSuperCategory(String category)
+    {
+        return _supercategoryDict.get(category);
+    }
+
+    /**Returns the MSCOCO cateogires
+     *
+     * @return
+     */
+    public static Set<String> getCOCOCategories() {return _cocoLexicon.keySet();}
+
+    /**Returns the MSCOCO supercategories
+     *
+     * @return
+     */
+    public static Set<String> getCOCOSupercategories() {return new HashSet<>(_supercategoryDict.values());}
 
     /**PRONOUN_TYPE enumerates various pronoun types as well as provides
      * static functions for handling them;
@@ -468,10 +617,13 @@ public class Mention extends Annotation
             typeWordSetDict.get(DEMONSTRATIVE).add("that");
             typeWordSetDict.get(DEMONSTRATIVE).add("these");
             typeWordSetDict.get(DEMONSTRATIVE).add("those");
+            typeWordSetDict.get(DEMONSTRATIVE).add("there");
             wordSet_sing.add("this");
             wordSet_sing.add("that");
-            wordSet_sing.add("these");
-            wordSet_sing.add("those");
+            wordSet_sing.add("there");
+            wordSet_plural.add("these");
+            wordSet_plural.add("those");
+
 
             //indefinite - anything / anybody / anyone / something /
             //             somebody / someone / nothing / nobody / one /

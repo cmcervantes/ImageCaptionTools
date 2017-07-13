@@ -1,7 +1,6 @@
 package structures;
 
-import nlptools.IllinoisChunker;
-import nlptools.IllinoisTagger;
+import nlptools.IllinoisAnnotator;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
@@ -23,10 +22,9 @@ public class SNLIPair extends Document
      * caption pairs using the given tagger and chunker
      *
      * @param jsonLine
-     * @param tagger
-     * @param chunker
+     * @param annotator
      */
-    public SNLIPair(String jsonLine, IllinoisTagger tagger, IllinoisChunker chunker)
+    public SNLIPair(String jsonLine, IllinoisAnnotator annotator)
     {
         String premiseStr = "", hypothesisStr = "";
         try{
@@ -53,8 +51,8 @@ public class SNLIPair extends Document
         }
 
         //Parse the two captions
-        _captionList.add(chunker.predictCaptionChunks(tagger.predict(premiseStr), _ID, 0));
-        _captionList.add(chunker.predictCaptionChunks(tagger.predict(hypothesisStr), _ID, 1));
+        _captionList.add(annotator.predictCaption(_ID, 0, premiseStr));
+        _captionList.add(annotator.predictCaption(_ID, 1, hypothesisStr));
     }
 
     /**Constructor used for combining the SNLI pair data from JSCON line and

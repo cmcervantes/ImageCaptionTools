@@ -512,6 +512,66 @@ public class Util
         }
         return maxIdx;
     }
+
+    /**Returns the given list as an evenly-divided list of lists,
+     * (each row is numColumns long)
+     *
+     * @param list
+     * @param numColumns
+     * @return
+     */
+    public static List<List<String>> listToRows(List<String> list, int numColumns)
+    {
+        //Add a row if the list isn't neatly divisible
+        int numRows = list.size() / numColumns;
+        if(list.size() % numRows > 0)
+            numRows++;
+
+        //Partition the list into a list of rows
+        List<List<String>> table = new ArrayList<>();
+        for(int i=0; i<numRows; i++){
+            List<String> row = new ArrayList<>();
+            for(int j=i*numColumns; j<(i+1)*numColumns; j++){
+                if(j < list.size())
+                    row.add(list.get(j));
+                else
+                    row.add("");
+            }
+            table.add(row);
+        }
+        return table;
+    }
+
+    /**Returns whether the range specified by start/end i is
+     * enclosed by the range specified by start/end j
+     *
+     * @param start_i   Start of first range
+     * @param end_i     End of first range
+     * @param start_j   Start of second range
+     * @param end_j     End of second range
+     * @return          Whether j encloses i
+     */
+    public static boolean isEnclosedByRange(int start_i, int end_i, int start_j, int end_j)
+    {
+        return start_j < start_i && end_i < end_j;
+    }
+
+    /**Returns whether the range specified by start/end i is
+     * overlapping with the range specified by start/end j
+     *
+     * @param start_i   Start of first range
+     * @param end_i     End of first range
+     * @param start_j   Start of second range
+     * @param end_j     End of second range
+     * @return          Whether j overlaps with i
+     */
+    public static boolean isOverlappingRange(int start_i, int end_i, int start_j, int end_j)
+    {
+        // [i   [j   i]    j]
+        // [j   [i   j]    i]
+        return start_i <= start_j && start_j <= end_i ||
+               start_j <= start_i && start_i <= end_j;
+    }
 }
 
 

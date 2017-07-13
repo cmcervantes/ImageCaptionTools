@@ -174,14 +174,15 @@ public class StringUtil {
      * row | cell cell cell
      *
      * @param table
+     * @param includesHeaders
      * @return
      */
-    public static String toTableStr(List<List<String>> table)
+    public static String toTableStr(List<List<String>> table, boolean includesHeaders)
     {
         String[][] tableArr = new String[table.size()][];
         for(int i=0; i<table.size(); i++)
             tableArr[i] = table.get(i).toArray(new String[]{});
-        return toTableStr(tableArr);
+        return toTableStr(tableArr, includesHeaders);
     }
 
     /**Returns the given 2d array as a formatted table string,
@@ -194,9 +195,10 @@ public class StringUtil {
      * row | cell cell cell
      *
      * @param table
+     * @param includesHeaders
      * @return
      */
-    public static String toTableStr(String[][] table)
+    public static String toTableStr(String[][] table, boolean includesHeaders)
     {
         //Set up our formatting string using an
         //array of column widths, such that the
@@ -214,8 +216,13 @@ public class StringUtil {
                 if(j < table[i].length)
                     if(table[i][j].length() > colWidths[j])
                         colWidths[j] = table[i][j].length();
-        String formatStr = "%-" + (colWidths[0]+1) + "s | ";
-        for(int i=1; i<numCols; i++)
+        String formatStr = "";
+        int startIdx = 0;
+        if(includesHeaders){
+            formatStr = "%-" + (colWidths[0]+1) + "s | ";
+            startIdx = 1;
+        }
+        for(int i=startIdx; i<numCols; i++)
             formatStr += "%-" + (colWidths[i]+1) + "s ";
         formatStr += "\n";
 
@@ -229,13 +236,19 @@ public class StringUtil {
                 colHeaders[col] = "";
         }
         sb.append(String.format(formatStr, (Object[])colHeaders));
-        for(int i=0; i<numCols; i++){
-            for(int j=0; j < colWidths[i] + 2; j++)
-                sb.append("-");
-            if(i == 0) //first coumn has pipe and extra space
-                sb.append("|-");
+
+        //Add that separating row of dashes
+        if(includesHeaders){
+            for(int i=0; i<numCols; i++){
+                for(int j=0; j < colWidths[i] + 2; j++)
+                    sb.append("-");
+                if(i == 0) //first column has pipe and extra space
+                    sb.append("|-");
+            }
+            sb.append("\n");
         }
-        sb.append("\n");
+
+        //Add the rows
         for(int r=1; r<numRows; r++){
             String[] row = new String[numCols];
             for(int c=0; c<numCols; c++){

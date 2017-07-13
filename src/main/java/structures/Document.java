@@ -86,6 +86,24 @@ public class Document
         initChains();
     }
 
+    /**Constructs a Document from the given captions and
+     * docID (which is only included for method signature reasons)
+     *
+     * @param docID       Document ID
+     * @param captionList List of captions for this Document
+     */
+    public Document(String docID, List<Caption> captionList)
+    {
+        _captionList = new ArrayList<>(captionList);
+        _ID = docID;
+        reviewed = false;
+        crossVal = -1;
+
+        //initialize our chains, given the captions
+        //and their internal mentions
+        initChains();
+    }
+
     /**Document constructor primarily used for loading
      * Documents from a database
      *
@@ -329,9 +347,8 @@ public class Document
     public void addBoundingBox(BoundingBox b, Collection<String> assocChainIDs)
     {
         for(String chainID : assocChainIDs)
-            for(Chain c :_chainDict.values())
-                if(c.getID().equals(chainID))
-                    c.addBoundingBox(b);
+            if(_chainDict.containsKey(chainID))
+                _chainDict.get(chainID).addBoundingBox(b);
     }
 
     /**Adds the given Caption to the internal list
@@ -365,6 +382,12 @@ public class Document
     public void addMentionToChain(Mention m)
     {
         //add the mention to its chain
+        //UPDATE: if for some reason we don't happen to have
+        //        this chain yet, add one (this should only
+        //        trigger if we have some weird DB issues that
+        //        should immediately be addressed)
+        if(!_chainDict.keySet().contains(m.getChainID()))
+            addChain(new Chain(_ID, m.getChainID()));
         _chainDict.get(m.getChainID()).addMention(m);
     }
 
@@ -438,10 +461,237 @@ public class Document
         return Document.toConll2012(this, chainSet);
     }
 
+    private List<List<Mention>> getAdjacentClusters(List<Mention> partOfCluster,
+                                                    List<List<Mention>> agentClusters)
+    {
+        int leftIdx = partOfCluster.get(0).getIdx();
+        int rightIdx = partOfCluster.get(partOfCluster.size()-1).getIdx();
+
+        //treat all multi-element clusters as neuter
+        String b_gender = "neuter";
+        if(partOfCluster.size() == 1)
+            b_gender = partOfCluster.get(0).getGender();
+
+        //Iterate through each agent cluster, finding the nearest
+        //on either side
+        List<Mention> leftAgents = null;
+        List<Mention> rightAgents = null;
+        int maxIdx = Integer.MIN_VALUE;
+        int minIdx = Integer.MAX_VALUE;
+        for(List<Mention> agents : agentClusters){
+            Mention a_last = agents.get(agents.size()-1);
+            Mention a_first = agents.get(0);
+            int idx_last = a_last.getIdx();
+            int idx_first = a_first.getIdx();
+
+            //treat all multi-element clusters as neuter
+            String a_gender = "neuter";
+            if(agents.size() == 1)
+                a_gender = agents.get(0).getGender();
+            boolean genderMatch = b_gender.equals("neuter") ||
+                    a_gender.equals("neuter") || b_gender.equals(a_gender);
+
+            //store this agent cluster if its the nearest
+            if(idx_last < leftIdx && idx_last > maxIdx && genderMatch){
+                maxIdx = idx_last;
+                leftAgents = agents;
+            } else if(idx_first > rightIdx && idx_first < minIdx && genderMatch){
+                minIdx = idx_first;
+                rightAgents = agents;
+            }
+        }
+        List<List<Mention>> agentArr = new ArrayList<>();
+        agentArr.add(leftAgents);
+        agentArr.add(rightAgents);
+        return agentArr;
+    }
+
+    /**Returns a set of chain pairs that are
+     * in the part-of relation (part-whole)
+     *
+     * @return  Set of Chain pairs (as arrays)
+     */
+    public Set<Chain[]> getPartOfChains()
+    {
+        Set<Mention[]> partOfSet = new HashSet<>();
+
+        //Storing mention types (coarse)
+        Map<Mention, String> typeDict = new HashMap<>();
+        for(Mention m : getMentionList()){
+            String coarseType = null;
+            switch(m.getLexicalType()){
+                case "people":
+                case "animals": coarseType = "agents";
+                    break;
+                case "bodyparts": coarseType = "bodyparts";
+                    break;
+                case "clothing":
+                case "colors":
+                case "clothing/colors": coarseType = "clothing";
+                    break;
+                default:
+                    if(m.getPronounType().isAnimate())
+                        coarseType = "agents";
+            }
+            typeDict.put(m, coarseType);
+        }
+
+        //Iterate through our captions
+        for(Caption c : _captionList){
+            //Create mention clusters -- that is, groups
+            //of agent, clothing, or bodypart mentions
+            //that are separated only by specified conjunctions
+            List<List<Mention>> cluster_agent = new ArrayList<>();
+            List<List<Mention>> cluster_bodyparts = new ArrayList<>();
+            List<List<Mention>> cluster_clothing = new ArrayList<>();
+
+            //Obvious list-delimiters (comma, and) should be used,
+            //as well as "on and", as in "a hat on and a blue shirt"
+            List<String> allowedConjList =
+                    Arrays.asList(",", "and", ", and", "on and");
+
+            List<Mention> currentCluster = new ArrayList<>();
+            for(int i=0; i<c.getMentionList().size(); i++){
+                Mention m_i = c.getMentionList().get(i);
+                String type_i = typeDict.get(m_i);
+
+                //If this mention isn't of a valid type, continue
+                if(type_i == null)
+                    continue;
+
+                Mention m_j = null;
+                String interstitialText = "";
+                if(i > 0){
+                    m_j = c.getMentionList().get(i-1);
+                    interstitialText = StringUtil.listToString(
+                            c.getInterstitialTokens(m_j, m_i), " ");
+                }
+
+                //We add this mention to the current cluster if
+                // 1) there _is_ a current cluster
+                // 2) the last mention in the cluster is the
+                //    left-adjacent mention
+                // 3) This mention has the same approved type as
+                //    the rest of the cluster
+                // 4) The interstitial text is one of the approved
+                //    conjunctions
+                boolean validClusterAddition = !currentCluster.isEmpty() &&
+                        currentCluster.get(currentCluster.size()-1).equals(m_j) &&
+                        type_i.equals(typeDict.get(m_j)) &&
+                        allowedConjList.contains(interstitialText);
+
+                //If this is not a valid cluster addition, close
+                //out / store the cluster before adding this mention
+                if(!validClusterAddition && !currentCluster.isEmpty()){
+                    String prevType = typeDict.get(currentCluster.get(currentCluster.size()-1));
+                    switch(prevType){
+                        case "agents": cluster_agent.add(currentCluster);
+                            break;
+                        case "bodyparts": cluster_bodyparts.add(currentCluster);
+                            break;
+                        case "clothing": cluster_clothing.add(currentCluster);
+                            break;
+                    }
+                    currentCluster = new ArrayList<>();
+                }
+
+                //Add this mention to the current cluster
+                currentCluster.add(m_i);
+            }
+
+            //For each bodyparts cluster, find the nearest left/right
+            //agent clusters with matching genders (if applicable)
+            for(List<Mention> bodyparts : cluster_bodyparts){
+                List<List<Mention>> nearestAgents =
+                        getAdjacentClusters(bodyparts, cluster_agent);
+                List<Mention> nearestLeft = nearestAgents.get(0);
+                List<Mention> nearestRight = nearestAgents.get(1);
+
+                List<Mention> agentCluster = null;
+
+                //1) Associate the nearest following agent cluster
+                //   if X in an XofY construction ("the arm of a man")
+                if(nearestRight != null){
+                    String interstitial_right =
+                            StringUtil.listToString(c.getInterstitialTokens(bodyparts.get(bodyparts.size()-1),
+                                    nearestRight.get(0)), " ").toLowerCase().trim();
+                    if(interstitial_right.equals("of"))
+                        agentCluster = nearestRight;
+                }
+                //2) Associate the nearest preceding agent cluster in
+                //   all other cases
+                if(agentCluster == null && nearestLeft != null)
+                    agentCluster = nearestLeft;
+
+                //Associate each bodypart as partOf the agent
+                if (agentCluster != null) {
+                    for (Mention b : bodyparts) {
+                        for (Mention a : agentCluster) {
+                            Mention[] arr = {b, a};
+                            if (!Util.containsArr(partOfSet, arr))
+                                partOfSet.add(arr);
+                        }
+                    }
+                }
+            }
+
+            //For each clothing cluster, find the nearest left/right
+            //agent clusters with matching genders if applicable
+            for(List<Mention> clothing : cluster_clothing){
+                List<List<Mention>> nearestAgents =
+                        getAdjacentClusters(clothing, cluster_agent);
+                List<Mention> nearestLeft = nearestAgents.get(0);
+
+                //Associate the nearest preceding agent cluster
+                if(nearestLeft != null){
+                    for(Mention cloth : clothing){
+                        for(Mention a : nearestLeft){
+                            Mention[] arr = {cloth, a};
+                            if(!Util.containsArr(partOfSet, arr))
+                                partOfSet.add(arr);
+                        }
+                    }
+                }
+            }
+        }
+
+        //As with the coref and subset relation, part-of actually
+        //operates over entities (chains), not mentions, so scale
+        //out, where a coref label means mentions cannot be in a
+        //part-of relation
+        Set<Chain[]> partOfChains = new HashSet<>();
+        for(Mention[] pair : partOfSet){
+            if(!pair[0].getChainID().equals(pair[1].getChainID()) &&
+               !pair[0].getChainID().equals("0") && !pair[1].getChainID().equals("0")){
+                Chain[] arr = {_chainDict.get(pair[0].getChainID()),
+                               _chainDict.get(pair[1].getChainID())};
+                if(!Util.containsArr(partOfChains, arr))
+                    partOfChains.add(arr);
+            }
+        }
+
+        //We should be able to enforce transitivity in exactly
+        //the same way as with subset pairs
+        _enforceSubsetTransitivity(partOfChains);
+
+        //Return the resulting chains
+        return partOfChains;
+    }
+
+    /**Returns the set of part-of pairs
+     * (as unique ID strings) for this document
+     *
+     * @return  Set of in-order mention pair strings
+     */
+    public Set<String> getPartOfMentions()
+    {
+        return _getMentionPairStrings(getPartOfChains());
+    }
+
     /**Returns a set of chain pairs that are in
      * the subset relation
      *
-     * @return
+     * @return  Set of Chain pairs (as arrays)
      */
     public Set<Chain[]> getSubsetChains()
     {
@@ -464,18 +714,27 @@ public class Document
      * for this Document; superset pairs can be inferred by
      * reversing each of the pairs
      *
-     * @return
+     * @return  Set of in-order mention pair strings
      */
     public Set<String> getSubsetMentions()
     {
-        Set<Chain[]> subsetChains = getSubsetChains();
+        return _getMentionPairStrings(getSubsetChains());
+    }
 
-        Set<String> subsetPairIDs = new HashSet<>();
-        for(Chain[] pair : subsetChains)
-            for(Mention m_sub : pair[0].getMentionSet())
-                for(Mention m_sup : pair[1].getMentionSet())
-                    subsetPairIDs.add(getMentionPairStr(m_sub, m_sup));
-        return subsetPairIDs;
+    /**Returns a set of in-order mention pair strings, given a set of
+     * Chain pairs; used by getSubsetMentions and getPartOfMentions
+     *
+     * @param chainPairs    Set of chain pairs (as arrays)
+     * @return              Set of in-order mention pair strings
+     */
+    private Set<String> _getMentionPairStrings(Set<Chain[]> chainPairs)
+    {
+        Set<String> mentionPairIDs = new HashSet<>();
+        for(Chain[] chainPair : chainPairs)
+            for(Mention m_i : chainPair[0].getMentionSet())
+                for(Mention m_j : chainPair[1].getMentionSet())
+                    mentionPairIDs.add(getMentionPairStr(m_i, m_j));
+        return mentionPairIDs;
     }
 
     /**Returns pairs of subset mentions (ordered as sub,sup),
@@ -662,82 +921,6 @@ public class Document
             }
         }
         return subsetChains;
-
-
-        /*
-        Set<Mention[]> subsets = new HashSet<>();
-        List<Mention> mentionList = getMentionList();
-        for(int i=0; i<mentionList.size(); i++){
-            Mention m_i = mentionList.get(i);
-
-            //Skip non-pronominal nonvisuals in train and
-            //nonvis everywhere else
-            if(m_i.getChainID().equals("0"))
-                continue;
-
-            for(int j=i+1; j<mentionList.size(); j++){
-                Mention m_j = mentionList.get(j);
-                if(m_j.getChainID().equals("0"))
-                    continue;
-
-                //skip coreferent pairs
-                if(m_i.getChainID().equals(m_j.getChainID()))
-                    continue;
-
-                //skip non-pronominal heterogeneously typed pairs
-                if(m_i.getPronounType() == Mention.PRONOUN_TYPE.NONE &&
-                   m_j.getPronounType() == Mention.PRONOUN_TYPE.NONE &&
-                   Mention.getLexicalTypeMatch(m_i, m_j) == 0)
-                    continue;
-
-
-                //If our boxes are in a proper subset relationship,
-                //add them to the set
-                if(getBoxesAreSubset(m_i, m_j))
-                    subsets.add(new Mention[]{m_i, m_j});
-                else if(getBoxesAreSubset(m_j, m_i))
-                    subsets.add(new Mention[]{m_j, m_i});
-                else {
-                    //If these mentions aren't in a subset relation,
-                    //check if IOU accounts for the mismatch (people only)
-                    if(m_i.getLexicalType().contains("people") &&
-                       m_j.getLexicalType().contains("people")){
-                        Set<BoundingBox> boxes_i = getBoxSetForMention(m_i);
-                        Set<BoundingBox> boxes_j = getBoxSetForMention(m_j);
-                        if(!boxes_i.isEmpty() && !boxes_j.isEmpty()){
-                            boolean ij_ordering = boxes_i.size() < boxes_j.size();
-
-                            Set<BoundingBox> boxes_1, boxes_2;
-                            if(ij_ordering){
-                                boxes_1 = boxes_i; boxes_2 = boxes_j;
-                            } else {
-                                boxes_1 = boxes_j; boxes_2 = boxes_i;
-                            }
-
-                            boolean coveredallBoxes = true;
-                            for(BoundingBox b_1 : boxes_1) {
-                                if(!boxes_2.contains(b_1)){
-                                    boolean foundMatch = false;
-                                    for(BoundingBox b_2 : boxes_2)
-                                        if(BoundingBox.IOU(b_1, b_2) > 0.9)
-                                            foundMatch = true;
-                                    if(!foundMatch)
-                                        coveredallBoxes = false;
-                                }
-                            }
-
-                            if(coveredallBoxes) {
-                                if(ij_ordering)
-                                    subsets.add(new Mention[]{m_i, m_j});
-                                else
-                                    subsets.add(new Mention[]{m_j, m_i});
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        return subsets;*/
     }
 
     /**Cascades the given subset links, enforcing subset transitivity, such that

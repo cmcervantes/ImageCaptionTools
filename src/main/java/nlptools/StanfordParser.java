@@ -4,6 +4,7 @@ import edu.stanford.nlp.ling.TaggedWord;
 import edu.stanford.nlp.trees.GrammaticalStructure;
 import edu.stanford.nlp.trees.TypedDependency;
 import structures.Caption;
+import structures.Token;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -37,7 +38,9 @@ public class StanfordParser
     {
         //convert our tokens to TaggedWords, for the parser
         List<TaggedWord> wordList = new ArrayList<>();
-        c.getTokenList().stream().forEachOrdered(t -> wordList.add(new TaggedWord(t.toString(), t.getPosTag())));
+        for(Token t : c.getTokenList()){
+            wordList.add(new TaggedWord(t.toString(), t.getPosTag()));
+        }
 
         //get a grammatical structure corresponding to the dependency prediction
         //and reduce it to a set of dependency strings (govIdx|rel|depIdx)

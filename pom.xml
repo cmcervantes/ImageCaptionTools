@@ -26,6 +26,11 @@
                  <artifactId>maven-assembly-plugin</artifactId>
                  <version>2.2-beta-2</version>
                  <configuration>
+                     <archive>
+                         <manifest>
+                             <mainClass>core.DocumentLoader</mainClass>
+                         </manifest>
+                     </archive>
                      <descriptorRefs>
                          <descriptorRef>jar-with-dependencies</descriptorRef>
                      </descriptorRefs>
@@ -175,7 +180,7 @@
             <artifactId>jwi</artifactId>
             <version>2.2.3</version>
         </dependency>
-        <!--Stanford's Dependency Parser-->
+        <!--Stanford's CoreNLP-->
         <dependency>
             <groupId>edu.stanford.nlp</groupId>
             <artifactId>stanford-parser</artifactId>
@@ -202,6 +207,12 @@
             <groupId>org.xerial</groupId>
             <artifactId>sqlite-jdbc</artifactId>
             <version>3.8.11.2</version>
+        </dependency>
+        <!--Argparse-->
+        <dependency>
+            <groupId>net.sourceforge.argparse4j</groupId>
+            <artifactId>argparse4j</artifactId>
+            <version>0.7.0</version>
         </dependency>
         <!-- Third Party APIs-->
         <dependency>

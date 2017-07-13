@@ -1,9 +1,6 @@
 package core;
 
-import nlptools.IllinoisChunker;
 import nlptools.StanfordParser;
-import nlptools.IllinoisTagger;
-import nlptools.StanfordTagger;
 import structures.*;
 import utilities.*;
 
@@ -19,18 +16,11 @@ public class DocumentLoader
 
     public static void main(String[] args)
     {
-        StanfordTagger stanTagger = new StanfordTagger();
-        System.exit(0);
-
-        IllinoisTagger tggr = new IllinoisTagger("/home/syphonnihil/source/data/pos/");
-        edu.illinois.cs.cogcomp.lbjava.nlp.seg.Token[] toks =
-                tggr.predict("A man in a blue suit walks on a beach.");
-        IllinoisChunker chnkr = new IllinoisChunker("/home/syphonnihil/source/data/chunk/");
-
-        //IllinoisTokenizer illTok = new IllinoisTokenizer();
-        //Pair<String[], IntPair[]> tokens = illTok.tokenizeSentence("A man in a blue suit walks on the beach.");
-
-        System.out.println();
+        String[] mscoco_mysqlParams = {"ccervan2.web.engr.illinois.edu",
+                "ccervan2_root", "thenIdefyheaven!", "ccervan2_coco"};
+        DBConnector conn = new DBConnector(mscoco_mysqlParams[0], mscoco_mysqlParams[1],
+                mscoco_mysqlParams[2], mscoco_mysqlParams[3]);
+        getDocumentSet(conn, 0, true, 100);
     }
 
     /**Returns a set of Documents, based on a .coref file
@@ -44,7 +34,7 @@ public class DocumentLoader
     public static Collection<Document> getDocumentSet(String corefFile, String lexiconDir, String wordListDir)
     {
         List<String> corefList = FileIO.readFile_lineList(corefFile);
-        Mention.initLexiconDict(lexiconDir);
+        Mention.initializeLexicons(lexiconDir, null);
         Cardinality.initCardLists(wordListDir + "/collectiveNouns.txt");
         Caption.initLemmatizer();
 
@@ -54,7 +44,12 @@ public class DocumentLoader
             String[] idParts = idStr.split("#");
             if(!corefDict.containsKey(idParts[0]))
                 corefDict.put(idParts[0], new ArrayList<>());
-            corefDict.get(idParts[0]).add(Integer.parseInt(idParts[1]), corefStr);
+            int insertionIdx = 0, captionIdx = Integer.parseInt(idParts[1]);
+            for(String corefLine : corefDict.get(idParts[0])){
+                if(captionIdx > Integer.parseInt(corefLine.split("\t")[0].split("#")[1]))
+                    insertionIdx++;
+            }
+            corefDict.get(idParts[0]).add(insertionIdx, corefStr);
         }
 
         Set<Document> docSet = new HashSet<>();
@@ -76,10 +71,11 @@ public class DocumentLoader
                                                       String imgFile, String lexiconDir,
                                                       String wordListDir)
     {
-        List<String> corefList = FileIO.readFile_lineList(corefFile);
-        Mention.initLexiconDict(lexiconDir);
+        Mention.initializeLexicons(lexiconDir, null);
         Cardinality.initCardLists(wordListDir + "/collectiveNouns.txt");
         Caption.initLemmatizer();
+
+        List<String> corefList = FileIO.readFile_lineList(corefFile);
 
         //Load .coref files and build the documents
         Map<String, List<String>> corefDict = new HashMap<>();
@@ -88,7 +84,12 @@ public class DocumentLoader
             String[] idParts = idStr.split("#");
             if(!corefDict.containsKey(idParts[0]))
                 corefDict.put(idParts[0], new ArrayList<>());
-            corefDict.get(idParts[0]).add(Integer.parseInt(idParts[1]), corefStr);
+            int insertionIdx = 0, captionIdx = Integer.parseInt(idParts[1]);
+            for(String corefLine : corefDict.get(idParts[0])){
+                if(captionIdx > Integer.parseInt(corefLine.split("\t")[0].split("#")[1]))
+                    insertionIdx++;
+            }
+            corefDict.get(idParts[0]).add(insertionIdx, corefStr);
         }
 
         Map<String, Document> docDict = new HashMap<>();
@@ -99,21 +100,19 @@ public class DocumentLoader
 
         //Load the img file and augment the documents
         String[][] imgTable = FileIO.readFile_table(imgFile);
-        System.out.println(imgTable.length);
         for(String row[] : imgTable){
             //Assume a format of
             //      id, url, cross_val, height, width
             String ID = row[0];
             docDict.get(ID).imgURL = row[1];
             docDict.get(ID).crossVal = Integer.parseInt(row[2]);
-            docDict.get(ID).height = Integer.parseInt(row[3]);
-            docDict.get(ID).width = Integer.parseInt(row[4]);
+            docDict.get(ID).reviewed = Integer.parseInt(row[3]) == 1;
+            docDict.get(ID).height = Integer.parseInt(row[4]);
+            docDict.get(ID).width = Integer.parseInt(row[5]);
         }
 
         //load bounding box file and add these bounding boxes
         //to the documents
-        String[][] boxTable = FileIO.readFile_table(bboxFile);
-        System.out.println(boxTable.length);
         for(String row[] : FileIO.readFile_table(bboxFile)){
             //Assume format
             //      img_id, box_idx, box_id, category, supercateogry, x, y, width, height
@@ -126,6 +125,14 @@ public class DocumentLoader
             int yMax = yMin + (int)Double.parseDouble(row[8]);
             Set<String> assocChains = new HashSet<>();
             assocChains.add("-1");
+
+            //if there isn't a -1 chain, add one
+            Set<String> chainIDs = new HashSet<>();
+            for(Chain c : docDict.get(docID).getChainSet())
+                chainIDs.add(c.getID());
+            if(!chainIDs.contains("-1"))
+                docDict.get(docID).addChain(new Chain(docID, "-1"));
+
             docDict.get(docID).addBoundingBox(new BoundingBox(docID,
                     boxIdx, xMin, yMin, xMax, yMax, cat, superCat), assocChains);
         }
@@ -156,303 +163,80 @@ public class DocumentLoader
         return docSet;
     }
 
-    /**Returns a set of Documents constructed from the database specified in
-     * the given conn, selecting all images; note that this database must be
-     * of the same format as one produced by populateDocumentDB()
+    /**Returns a collection of documents from the database specified by
+     * the conn
      *
-     * @param conn
-     * @return
+     * @param conn          Database connector
+     * @return              Collection of documents
      */
     public static Collection<Document> getDocumentSet(DBConnector conn)
     {
-        return getDocumentSet(conn, -1);
+        return getDocumentSet(conn, -1, false, -1);
     }
 
-
-    /**Returns a set of Documents constructed from the database specified in
-     * the given conn, selecting only those images specified by the given
-     * crossVal flag; note that this database must be of the same format as
-     * one produced by populateDocumentDB()
+    /**Returns a collection of documents from the database specified by
+     * the conn
      *
-     * @param conn
-     * @param crossVal
-     * @return
-     *
-    public static Collection<Document> getDocumentSet(DBConnector conn, int crossVal)
-    {
-        CachedRowSet rs;
-        String query;
-        Map<String, Document> docDict = new HashMap<>();
-
-        try{
-            Logger.log("Initializing Documents from <image>");
-            if(crossVal < 0){
-                query = "SELECT img_id, height, width, "+
-                        "cross_val, reviewed FROM image";
-            } else {
-                query = "SELECT img_id, height, width, "+
-                        "cross_val, reviewed FROM image "+
-                        "WHERE cross_val=" + crossVal;
-            }
-            rs = conn.query(query);
-            while(rs.next()){
-                Document d = new Document(rs.getString("img_id"));
-                d.height = rs.getInt("height");
-                d.width = rs.getInt("width");
-                d.crossVal = Util.castInteger(rs.getObject("cross_val"));
-                d.reviewed = rs.getBoolean("reviewed");
-                docDict.put(d.getID(), d);
-            }
-
-            Logger.log("Building Tokens and Captions from <token>");
-            if(crossVal < 0){
-                query = "SELECT img_id, caption_idx, token_idx, " +
-                        "token, lemma, pos_tag FROM token";
-            } else {
-                query = "SELECT token.img_id, token.caption_idx, "+
-                        "token.token_idx, token.token, token.lemma, " +
-                        "token.pos_tag FROM token JOIN image ON "+
-                        "token.img_id=image.img_id "+
-                        "WHERE image.cross_val="+crossVal;
-            }
-            rs = conn.query(query);
-            while(rs.next()){
-                String imgID = rs.getString("img_id");
-                int captionIdx = rs.getInt("caption_idx");
-                int tokenIdx = rs.getInt("token_idx");
-                String text = rs.getString("token");
-                String lemma = rs.getString("lemma");
-                String posTag = rs.getString("pos_tag");
-                Token t = new Token(imgID, captionIdx, tokenIdx,
-                        text, lemma, posTag);
-
-                //Add a new caption to this document, if this index
-                //doesn't already exist; add the Token to this caption
-                Caption c = docDict.get(imgID).getCaption(captionIdx);
-                if(c == null){
-                    c = new Caption(imgID, captionIdx);
-                    docDict.get(imgID).addCaption(c);
-                }
-                c.addToken(t);
-            }
-
-            Logger.log("Partitioning Tokens into Chunks with <chunk>");
-            if(crossVal < 0){
-                query = "SELECT img_id, caption_idx, chunk_idx, " +
-                        "start_token_idx, end_token_idx, chunk_type "+
-                        "FROM chunk";
-            } else {
-                query = "SELECT chunk.img_id, chunk.caption_idx, "+
-                        "chunk.chunk_idx, chunk.start_token_idx, "+
-                        "chunk.end_token_idx, chunk.chunk_type "+
-                        "FROM chunk JOIN image ON chunk.img_id=image.img_id "+
-                        "WHERE image.cross_val="+crossVal;
-            }
-            rs = conn.query(query);
-            while(rs.next()){
-                String imgID = rs.getString("img_id");
-                int captionIdx = rs.getInt("caption_idx");
-                int chunkIdx = rs.getInt("chunk_idx");
-                int startTokenIdx = rs.getInt("start_token_idx");
-                int endTokenIdx = rs.getInt("end_token_idx");
-                String chunkType = rs.getString("chunk_type");
-                docDict.get(imgID).getCaption(captionIdx).addChunk(chunkIdx,
-                        chunkType, startTokenIdx, endTokenIdx);
-            }
-
-            Logger.log("Loading bounding boxes from <box>");
-            if(crossVal < 0){
-                query = "SELECT img_id, box_id, x_min, y_min, " +
-                        "x_max, y_max FROM box";
-            } else {
-                query = "SELECT box.img_id, box.box_id, "+
-                        "box.x_min, box.y_min, " +
-                        "box.x_max, box.y_max FROM box "+
-                        "JOIN image ON box.img_id=image.img_id "+
-                        "WHERE image.cross_val="+crossVal;
-            }
-            Map<String, Map<Integer, BoundingBox>> boxDict = new HashMap<>();
-            rs = conn.query(query);
-            while(rs.next()){
-                String imgID = rs.getString("img_id");
-                int boxID = rs.getInt("box_id");
-                int xMin = rs.getInt("x_min");
-                int yMin = rs.getInt("y_min");
-                int xMax = rs.getInt("x_max");
-                int yMax = rs.getInt("y_max");
-                if(!boxDict.containsKey(imgID))
-                    boxDict.put(imgID, new HashMap<>());
-                boxDict.get(imgID).put(boxID,
-                        new BoundingBox(imgID, boxID, xMin, yMin, xMax, yMax));
-            }
-
-            Logger.log("Loading chains from <chain> and associating them with "+
-                    "the bounding boxes from the previous step");
-            if(crossVal < 0){
-                query = "SELECT img_id, chain_id, assoc_box_ids, " +
-                        "is_scene, is_orig_nobox FROM chain";
-            } else {
-                query = "SELECT chain.img_id, chain.chain_id, "+
-                        "chain.assoc_box_ids, chain.is_scene, "+
-                        "chain.is_orig_nobox "+
-                        "FROM chain JOIN image ON "+
-                        "chain.img_id=image.img_id "+
-                        "WHERE image.cross_val="+crossVal;
-            }
-            rs = conn.query(query);
-            while(rs.next()){
-                String imgID = rs.getString("img_id");
-                String chainID = rs.getString("chain_id");
-                boolean isScene = rs.getBoolean("is_scene");
-                boolean isOrigNobox = rs.getBoolean("is_orig_nobox");
-                String assocBoxIDs = rs.getString("assoc_box_ids");
-                Chain c = new Chain(imgID, chainID);
-                c.isScene = isScene;
-                c.isOrigNobox = isOrigNobox;
-                if(assocBoxIDs != null){
-                    for(String assocBox : assocBoxIDs.split("\\|")){
-                        Integer boxID = Integer.parseInt(assocBox);
-                        if(boxDict.get(imgID).containsKey(boxID))
-                            c.addBoundingBox(boxDict.get(imgID).get(boxID));
-                    }
-                }
-                docDict.get(imgID).addChain(c);
-            }
-
-            //add chain 0 to all documents
-            for(Document d : docDict.values())
-                d.addChain(new Chain(d.getID(), "0"));
-
-            Logger.log("Partitioning Tokens into Mentions with <mention>");
-            if(crossVal < 0){
-                query = "SELECT img_id, caption_idx, mention_idx, " +
-                        "start_token_idx, end_token_idx, card_str, " +
-                        "chain_id, lexical_type FROM mention";
-            } else {
-                query = "SELECT mention.img_id, mention.caption_idx, "+
-                        "mention.mention_idx, mention.start_token_idx, "+
-                        "mention.end_token_idx, mention.card_str, " +
-                        "mention.chain_id, mention.lexical_type "+
-                        "FROM mention JOIN image ON "+
-                        "mention.img_id=image.img_id WHERE "+
-                        "image.cross_val="+crossVal;
-            }
-            rs = conn.query(query);
-            while(rs.next()){
-                String imgID = rs.getString("img_id");
-                int captionIdx = rs.getInt("caption_idx");
-                int mentionIdx = rs.getInt("mention_idx");
-                int startTokenIdx = rs.getInt("start_token_idx");
-                int endTokenIdx = rs.getInt("end_token_idx");
-                String cardStr = rs.getString("card_str");
-                Cardinality card = null;
-                try{
-                    if(cardStr != null)
-                        card = new Cardinality(cardStr);
-                }catch(Exception ex){
-                    Logger.log(ex);
-                }
-                String chainID = rs.getString("chain_id");
-                String lexicalType = rs.getString("lexical_type");
-
-                Mention m = docDict.get(imgID).getCaption(captionIdx).addMention(mentionIdx,
-                        lexicalType, chainID, card, startTokenIdx, endTokenIdx);
-                docDict.get(imgID).addMentionToChain(m);
-            }
-
-            Logger.log("Reading dependency trees from <dependency>");
-            if(crossVal < 0){
-                query = "SELECT img_id, caption_idx, gov_token_idx, " +
-                        "dep_token_idx, relation FROM dependency";
-            } else {
-                query = "SELECT dependency.img_id, dependency.caption_idx, "+
-                        "dependency.gov_token_idx, dependency.dep_token_idx, "+
-                        "dependency.relation FROM dependency JOIN image "+
-                        "ON dependency.img_id=image.img_id WHERE cross_val="+crossVal;
-            }
-            Map<String, Map<Integer, Set<String>>> depDict = new HashMap<>();
-            rs = conn.query(query);
-            while(rs.next()){
-                String imgID = rs.getString("img_id");
-                int captionIdx = rs.getInt("caption_idx");
-                int govTokenIdx = rs.getInt("gov_token_idx");
-                int depTokenIdx = rs.getInt("dep_token_idx");
-                String relation = rs.getString("relation");
-                if(!depDict.containsKey(imgID))
-                    depDict.put(imgID, new HashMap<>());
-                if(!depDict.get(imgID).containsKey(captionIdx))
-                    depDict.get(imgID).put(captionIdx, new HashSet<>());
-                depDict.get(imgID).get(captionIdx).add(govTokenIdx +
-                        "|" + relation + "|" + depTokenIdx);
-            }
-            for(String imgID : depDict.keySet())
-                for(Integer capIdx : depDict.get(imgID).keySet())
-                    docDict.get(imgID).getCaption(capIdx).setRootNode(depDict.get(imgID).get(capIdx));
-
-        } catch(Exception ex) {
-            Logger.log(ex);
-        }
-        Logger.log("Document loading complete");
-        return new HashSet<>(docDict.values());
-    }
-    */
-
-    /**Returns all the Documents constructed from the given database conn of the
-     * given crossVal flag
-     *
-     * @param conn
-     * @param crossVal
-     * @return
+     * @param conn          Database connector
+     * @param crossVal      The cross validation flag (-1: all; 0: dev; 1: train; 2: test)
+     * @return              Collection of documents
      */
     public static Collection<Document> getDocumentSet(DBConnector conn, int crossVal)
     {
-        int numDocs = 0;
-
-        //Get the total number of documents with the specified crossval flag
-        String query = "SELECT COUNT(*) AS row_count FROM image";
-        if(crossVal >= 0)
-            query += " WHERE cross_val=" + crossVal;
-        query += ";";
-
-        CachedRowSet rs;
-        try{
-            rs = conn.query(query);
-            rs.next();
-            numDocs = rs.getInt("row_count") ;
-        } catch(Exception ex) {Logger.log(ex);}
-
-        return getDocumentSet(conn, crossVal, numDocs);
+        return getDocumentSet(conn, crossVal, false, -1);
     }
 
-    /**For debugging use only; returns a random set of numDocs Documents from the
-     * specified database with the given crossVal flag.
+    /**Returns a collection of documents from the database specified by
+     * the conn
      *
-     * @param crossVal
-     * @param numDocs
-     * @return
+     * @param conn          Database connector
+     * @param crossVal      The cross validation flag (-1: all; 0: dev; 1: train; 2: test)
+     * @param reviewedOnly  Whether to retrieve only reviewed document
+     * @return              Collection of documents
      */
-    public static Collection<Document> getDocumentSet(DBConnector conn, int crossVal, int numDocs)
+    public static Collection<Document> getDocumentSet(DBConnector conn, int crossVal, boolean reviewedOnly)
+    {
+        return getDocumentSet(conn, crossVal, reviewedOnly, -1);
+    }
+
+    /**Returns a collection of documents from the database specified by
+     * the conn
+     *
+     * @param conn          Database connector
+     * @param crossVal      The cross validation flag (-1: all; 0: dev; 1: train; 2: test)
+     * @param reviewedOnly  Whether to retrieve only reviewed document
+     * @param numDocs       The number of random docs to retrieve (&leq;0: all; &geq;1: random documents)
+     * @return              Collection of documents
+     */
+    public static Collection<Document> getDocumentSet(DBConnector conn, int crossVal,
+                                                      boolean reviewedOnly, int numDocs)
     {
         CachedRowSet rs;
         String query;
+
+        //Get the valid documents
         Set<String> imgIDs = new HashSet<>();
-        numDocs = Math.max(0, numDocs);
-
-        //First, get random IDs with the given crossVal flag
         try{
-            if(crossVal < 0){
-                query = "SELECT img_id FROM image";
-            } else {
-                query = "SELECT img_id FROM image "+
-                        "WHERE cross_val=" +
-                        crossVal;
+            query = "SELECT img_id FROM image";
+            if(crossVal >= 0 || reviewedOnly)
+                query += " WHERE ";
+            if(crossVal >= 0)
+                query += "cross_val="+crossVal;
+            if(reviewedOnly){
+                if(crossVal >= 0)
+                    query += " AND ";
+                query += "reviewed=1";
             }
-            query += " ORDER BY ";
-            if(conn.getDBType() == DBConnector.DBType.SQLITE)
-                query += "RANDOM() ";
-            else if(conn.getDBType() == DBConnector.DBType.MYSQL)
-                query += "RAND() ";
-            query += "LIMIT " + numDocs;
+            if(numDocs > 0){
+                query += " ORDER BY ";
+                if(conn.getDBType() == DBConnector.DBType.SQLITE)
+                    query += "RANDOM() ";
+                else if(conn.getDBType() == DBConnector.DBType.MYSQL)
+                    query += "RAND() ";
+                query += "LIMIT " + numDocs;
+            }
+            query += ";";
+
             rs = conn.query(query);
             while(rs.next())
                 imgIDs.add(rs.getString("img_id"));
@@ -464,12 +248,12 @@ public class DocumentLoader
         return getDocumentSet(conn, imgIDs);
     }
 
-    /**For debugging use only; returns the Document objects corresponding to
-     * the given docIDs
+    /**Returns a collection of documents from the database specified by
+     * the conn
      *
-     * @param conn
-     * @param docIDs
-     * @return
+     * @param conn      Database connector
+     * @param docIDs    Document IDs
+     * @return          Collection of documents
      */
     public static Collection<Document> getDocumentSet(DBConnector conn, Collection<String> docIDs)
     {
@@ -576,7 +360,7 @@ public class DocumentLoader
                 Chain c = new Chain(imgID, chainID);
                 c.isScene = isScene;
                 c.isOrigNobox = isOrigNobox;
-                if(assocBoxIDs != null){
+                if(assocBoxIDs != null && !assocBoxIDs.trim().isEmpty()){
                     for(String assocBox : assocBoxIDs.split("\\|")){
                         Integer boxID = Integer.parseInt(assocBox);
                         if(boxDict.get(imgID).containsKey(boxID))
@@ -795,7 +579,7 @@ public class DocumentLoader
          * specifies whether it should have the scene flag */
         Logger.log("Creating <chain>");
         query = "CREATE TABLE IF NOT EXISTS chain (img_id VARCHAR(20), "+
-                "chain_id VARCHAR(10), assoc_box_ids VARCHAR(50), "+
+                "chain_id VARCHAR(10), assoc_box_ids VARCHAR(250), "+
                 "is_scene TINYINT(1), is_orig_nobox TINYINT(1), "+
                 "PRIMARY KEY(img_id, chain_id));";
         conn.createTable(query);
@@ -841,6 +625,7 @@ public class DocumentLoader
          * the Stanford Dependency parser
          */
         Logger.log("Creating <dependency>");
+
         StanfordParser parser = new StanfordParser();
         int totalCaps = 0;
         for(Document d : docSet)
@@ -881,5 +666,80 @@ public class DocumentLoader
             }
         }
         conn.update(query, paramSet, batchSize, numThreads);
+    }
+
+    /**
+     *
+     * @param docSet
+     * @param outRoot
+     */
+    public static void exportCOCOFiles(Collection<Document> docSet, String outRoot)
+    {
+        List<String> ll_img = new ArrayList<>();
+        List<String> ll_bbox = new ArrayList<>();
+        List<String> ll_coref = new ArrayList<>();
+
+        for(Document d : docSet){
+            ll_img.add(d.getID() + "," + d.imgURL + "," +
+                    d.crossVal + "," + d.reviewed + "," +
+                    d.height + "," + d.width);
+
+            for(BoundingBox b : d.getBoundingBoxSet()){
+                String bboxLine = d.getID() + "," + b.getIdx() + "," +
+                        b.getCategory() + "," + b.getSuperCategory() + "," +
+                        b.getXMin() + "," + b.getYMin() + "," +
+                        b.getXMax() + "," + b.getYMax() + ",";
+                Set<String> assocChains = new HashSet<>();
+                for(Mention m : d.getMentionSetForBox(b))
+                    assocChains.add(m.getChainID());
+                if(!assocChains.isEmpty()){
+                    List<String> assocChains_list = new ArrayList<>(assocChains);
+                    Collections.sort(assocChains_list);
+                    bboxLine += StringUtil.listToString(assocChains_list, "|");
+                }
+                ll_bbox.add(bboxLine);
+            }
+
+            for(Caption c : d.getCaptionList())
+                ll_coref.add(c.toCorefString(true));
+        }
+        FileIO.writeFile(ll_img, outRoot + "_img", "csv", false);
+        FileIO.writeFile(ll_bbox, outRoot + "_bbox", "csv", false);
+        FileIO.writeFile(ll_coref, outRoot + "_caps", "coref", false);
+    }
+
+    /**Exports a collection of documents to a release directory (which assumes
+     * subdirectories Sentences/ and Annotations/
+     *
+     * @param docSet
+     * @param releaseDir
+     */
+    public static void exportDocumentToReleaseDir(Collection<Document> docSet, String releaseDir)
+    {
+        List<String> ll_subsets = new ArrayList<>();
+
+        for(Document d : docSet){
+            String docID = d.getID().replace(".jpg", "");
+
+            //Export an entities-formatted caption file
+            List<String> captionList = new ArrayList<>();
+            for(Caption c : d.getCaptionList())
+                captionList.add(c.toEntitiesString());
+            FileIO.writeFile(captionList, releaseDir + "Sentences/" +
+                    docID, "txt", false);
+
+            //Export a bounding box file
+            String boxXML = XmlIO.createdBoundingBoxXML(d);
+            if(boxXML != null)
+                FileIO.writeFile(boxXML, releaseDir +
+                        "Annotations/" + docID, "txt", false);
+            else
+                Logger.log("ERROR: failed to create box XML for " + d.getID());
+
+            //Add the subsets to the list
+            for(Chain[] subsetPair : d.getSubsetChains())
+                ll_subsets.add(d.getID() + "," + subsetPair[0].getID() + "," + subsetPair[1].getID());
+        }
+        FileIO.writeFile(ll_subsets, releaseDir + "subsets", "csv", false);
     }
 }

@@ -14,12 +14,13 @@ import java.util.List;
  */
 public class Document
 {
-    protected static final String PTRN_APPOS = "^NP , (NP (VP |ADJP |PP |and )*)+,.*$";
-    protected static final String PTRN_LIST = "^NP , (NP ,?)* and NP.*$";
+    static final String _PTRN_APPOS = "^NP , (NP (VP |ADJP |PP |and )*)+,.*$";
+    static final String _PTRN_LIST = "^NP , (NP ,?)* and NP.*$";
 
-    protected String _ID;
-    protected Map<String, Chain> _chainDict;
-    protected List<Caption> _captionList;
+    String _ID;
+    Map<String, Chain> _chainDict;
+    List<Caption> _captionList;
+    Set<BoundingBox> _boxSet;
 
     public int height;
     public int width;
@@ -36,10 +37,7 @@ public class Document
      */
     public Document(String sentenceFilename, String annotationFilename)
     {
-        _ID = StringUtil.getFilenameFromPath(sentenceFilename) + ".jpg";
-        crossVal = -1;
-        reviewed = false;
-        _captionList = new ArrayList<>();
+        _init(StringUtil.getFilenameFromPath(sentenceFilename) + ".jpg");
 
         //Load the sentence files into Captions
         List<String> capStrList =
@@ -70,7 +68,9 @@ public class Document
      */
     public Document(List<String> corefStrings)
     {
-        _captionList = new ArrayList<>();
+        //Initialize everything, and reset the doc ID after
+        //parsing the captions
+        _init("");
         try{
             for(String corefStr : corefStrings)
                 _captionList.add(Caption.fromCorefStr(corefStr));
@@ -78,8 +78,6 @@ public class Document
             Logger.log(ex);
         }
         _ID = _captionList.get(0).getDocID();
-        reviewed = false;
-        crossVal = -1;
 
         //initialize our chains, given the captions
         //and their internal mentions
@@ -94,10 +92,8 @@ public class Document
      */
     public Document(String docID, List<Caption> captionList)
     {
+        _init(docID);
         _captionList = new ArrayList<>(captionList);
-        _ID = docID;
-        reviewed = false;
-        crossVal = -1;
 
         //initialize our chains, given the captions
         //and their internal mentions
@@ -111,19 +107,26 @@ public class Document
      */
     public Document(String ID)
     {
-        _ID = ID;
-        _chainDict = new HashMap<>();
-        _captionList = new ArrayList<>();
-        reviewed = false;
-        crossVal = -1;
+        _init(ID);
     }
 
     protected Document()
     {
-        _chainDict = new HashMap<>();
-        _captionList = new ArrayList<>();
-        reviewed = false;
+        _init("");
+    }
+
+    /**Initializes all the private vars
+     *
+     * @param ID
+     */
+    private void _init(String ID)
+    {
+        _ID = ID;
         crossVal = -1;
+        reviewed = false;
+        _captionList = new ArrayList<>();
+        _boxSet = new HashSet<>();
+        _chainDict = new HashMap<>();
     }
 
     /**Initializes the set of chains from the mentions in
@@ -131,7 +134,6 @@ public class Document
      */
     private void initChains()
     {
-        _chainDict = new HashMap<>();
         for(Caption c : _captionList){
             for(Mention m : c.getMentionList()){
                 String chainID = m.getChainID();
@@ -197,9 +199,7 @@ public class Document
      */
     public Set<BoundingBox> getBoundingBoxSet()
     {
-        Set<BoundingBox> boxSet = new HashSet<>();
-        _chainDict.values().forEach(c -> boxSet.addAll(c.getBoundingBoxSet()));
-        return boxSet;
+        return _boxSet;
     }
 
     /**Returns a list of coref strings for this document's captions,
@@ -346,6 +346,8 @@ public class Document
      */
     public void addBoundingBox(BoundingBox b, Collection<String> assocChainIDs)
     {
+        _boxSet.add(b);
+
         for(String chainID : assocChainIDs)
             if(_chainDict.containsKey(chainID))
                 _chainDict.get(chainID).addBoundingBox(b);
@@ -461,8 +463,8 @@ public class Document
         return Document.toConll2012(this, chainSet);
     }
 
-    private List<List<Mention>> getAdjacentClusters(List<Mention> partOfCluster,
-                                                    List<List<Mention>> agentClusters)
+    private List<List<Mention>> _getAdjacentClusters(List<Mention> partOfCluster,
+                                                     List<List<Mention>> agentClusters)
     {
         int leftIdx = partOfCluster.get(0).getIdx();
         int rightIdx = partOfCluster.get(partOfCluster.size()-1).getIdx();
@@ -490,12 +492,20 @@ public class Document
                 a_gender = agents.get(0).getGender();
             boolean genderMatch = b_gender.equals("neuter") ||
                     a_gender.equals("neuter") || b_gender.equals(a_gender);
+            boolean partOfPlural = partOfCluster.get(0).getHead().getPosTag().equals("NNS") ||
+                    partOfCluster.get(0).getHead().getPosTag().equals("NNPS");
+            boolean agentPlural = agents.get(0).getHead().getPosTag().equals("NNS") ||
+                    agents.get(0).getHead().getPosTag().equals("NNPS");
+            boolean pluralMatch = partOfCluster.size() > 1 || agents.size() > 1 ||
+                    partOfPlural == agentPlural;
 
             //store this agent cluster if its the nearest
-            if(idx_last < leftIdx && idx_last > maxIdx && genderMatch){
+            if(idx_last < leftIdx && idx_last > maxIdx &&
+               genderMatch && pluralMatch){
                 maxIdx = idx_last;
                 leftAgents = agents;
-            } else if(idx_first > rightIdx && idx_first < minIdx && genderMatch){
+            } else if(idx_first > rightIdx && idx_first < minIdx &&
+                      genderMatch && pluralMatch){
                 minIdx = idx_first;
                 rightAgents = agents;
             }
@@ -603,7 +613,7 @@ public class Document
             //agent clusters with matching genders (if applicable)
             for(List<Mention> bodyparts : cluster_bodyparts){
                 List<List<Mention>> nearestAgents =
-                        getAdjacentClusters(bodyparts, cluster_agent);
+                        _getAdjacentClusters(bodyparts, cluster_agent);
                 List<Mention> nearestLeft = nearestAgents.get(0);
                 List<Mention> nearestRight = nearestAgents.get(1);
 
@@ -639,7 +649,7 @@ public class Document
             //agent clusters with matching genders if applicable
             for(List<Mention> clothing : cluster_clothing){
                 List<List<Mention>> nearestAgents =
-                        getAdjacentClusters(clothing, cluster_agent);
+                        _getAdjacentClusters(clothing, cluster_agent);
                 List<Mention> nearestLeft = nearestAgents.get(0);
 
                 //Associate the nearest preceding agent cluster
@@ -776,8 +786,8 @@ public class Document
 
             //Determine if this caption's chunk string (including extra-chunk tokens)
             //matches the appositive but _not_ the list pattern (since they overlap)
-            if(c.toChunkTypeString(true).matches(PTRN_APPOS) &&
-               !c.toChunkTypeString(true).matches(PTRN_LIST)){
+            if(c.toChunkTypeString(true).matches(_PTRN_APPOS) &&
+               !c.toChunkTypeString(true).matches(_PTRN_LIST)){
                 //If we have a match, grab the first NP and VP
                 Chunk firstNP = m0.getChunkList().get(m0.getChunkList().size() - 1);
                 Chunk firstVP = null;

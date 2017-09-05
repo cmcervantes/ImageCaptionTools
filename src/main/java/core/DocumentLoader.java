@@ -350,6 +350,7 @@ public class DocumentLoader
             query = "SELECT img_id, chain_id, assoc_box_ids, " +
                     "is_scene, is_orig_nobox FROM chain "+
                     "WHERE img_id IN " + docIdStr;
+            Map<String, Map<Integer, Set<String>>> boxChainDict = new HashMap<>();
             rs = conn.query(query);
             while(rs.next()){
                 String imgID = rs.getString("img_id");
@@ -360,14 +361,28 @@ public class DocumentLoader
                 Chain c = new Chain(imgID, chainID);
                 c.isScene = isScene;
                 c.isOrigNobox = isOrigNobox;
+
                 if(assocBoxIDs != null && !assocBoxIDs.trim().isEmpty()){
                     for(String assocBox : assocBoxIDs.split("\\|")){
                         Integer boxID = Integer.parseInt(assocBox);
-                        if(boxDict.get(imgID).containsKey(boxID))
-                            c.addBoundingBox(boxDict.get(imgID).get(boxID));
+
+                        if(!boxChainDict.containsKey(imgID))
+                            boxChainDict.put(imgID, new HashMap<>());
+                        if(!boxChainDict.get(imgID).containsKey(boxID))
+                            boxChainDict.get(imgID).put(boxID, new HashSet<>());
+                        boxChainDict.get(imgID).get(boxID).add(chainID);
                     }
                 }
                 docDict.get(imgID).addChain(c);
+            }
+            //Add the boxes
+            for(String imgID : boxDict.keySet()){
+                for(Integer boxID : boxDict.get(imgID).keySet()){
+                    Set<String> assocChains = new HashSet<>();
+                    if(boxChainDict.containsKey(imgID) && boxChainDict.get(imgID).containsKey(boxID))
+                        assocChains.addAll(boxChainDict.get(imgID).get(boxID));
+                    docDict.get(imgID).addBoundingBox(boxDict.get(imgID).get(boxID), assocChains);
+                }
             }
 
             //add chain 0 to all documents

@@ -193,6 +193,19 @@ public class Mention extends Annotation
     public String getChainID(){return _chainID;}
     public String getLexicalType(){return _lexType;}
 
+    /**Sets the lexical type of this mention
+     * DEPRECATED: lexical types should not be set in
+     * this way; this is being added to deal with an issue
+     * with the MSCOCO database
+     *
+     * @param lexType
+     */
+    @Deprecated
+    public void setLexicalType(String lexType)
+    {
+        _lexType = lexType;
+    }
+
     /**Returns the token indices of the tokens at the
      * start and end of this mention
      *
@@ -378,8 +391,11 @@ public class Mention extends Annotation
                 }
             }
             _flickr30kLexicon = new HashMap<>();
-            for(String lemma : lemmaTypeSetDict.keySet())
-                _flickr30kLexicon.put(lemma, StringUtil.listToString(lemmaTypeSetDict.get(lemma), "/"));
+            for(String lemma : lemmaTypeSetDict.keySet()){
+                List<String> typeList = new ArrayList<>(lemmaTypeSetDict.get(lemma));
+                Collections.sort(typeList);
+                _flickr30kLexicon.put(lemma, StringUtil.listToString(typeList, "/"));
+            }
         }
 
         //Load the coco lexicon file
@@ -464,6 +480,7 @@ public class Mention extends Annotation
         if(categories.isEmpty())
             return null;
         List<String> categoryList = new ArrayList<>(categories);
+        Collections.sort(categoryList);
         return StringUtil.listToString(categoryList, "/");
     }
 
@@ -503,6 +520,7 @@ public class Mention extends Annotation
         if(categories.isEmpty())
             return null;
         List<String> categoryList = new ArrayList<>(categories);
+        Collections.sort(categoryList);
         return StringUtil.listToString(categoryList, "/");
     }
 
@@ -513,7 +531,15 @@ public class Mention extends Annotation
      */
     public static String getSuperCategory(String category)
     {
-        return _supercategoryDict.get(category);
+        if(category == null)
+            return null;
+
+        Set<String> superCats = new HashSet<>();
+        for(String cat : category.split("/"))
+            superCats.add(_supercategoryDict.get(cat));
+        List<String> superCatList = new ArrayList<>(superCats);
+        Collections.sort(superCatList);
+        return StringUtil.listToString(superCatList, "/");
     }
 
     /**Returns the MSCOCO cateogires

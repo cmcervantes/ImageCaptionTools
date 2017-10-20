@@ -16,6 +16,9 @@ public class Document
 {
     static final String _PTRN_APPOS = "^NP , (NP (VP |ADJP |PP |and )*)+,.*$";
     static final String _PTRN_LIST = "^NP , (NP ,?)* and NP.*$";
+    static final String[] SINGULAR_MODS = {"one", "1", "first", "second", "third"};
+    static final String[] UNDERDEFINED_PRONOMS = {"that", "which", "who", "whom", "what"};
+    static final String[] IDENTITY_TERMS = {"to be", "like"};
 
     String _ID;
     Map<String, Chain> _chainDict;
@@ -933,6 +936,195 @@ public class Document
         return subsetChains;
     }
 
+    /**Performs heuristic, intra-sentential, pronominal coreference
+     * resolution, returning a set of (pronom, non-pronom) pairs
+     *
+     * @return
+     */
+    public Set<Mention[]> getPronomCorefMentions()
+    {
+        Set<Mention[]> corefPairs = new HashSet<>();
+        for(Caption c : _captionList){
+            List<Mention> mentions = c.getMentionList();
+            for(int i=0; i<mentions.size(); i++){
+                Mention m_pronom = mentions.get(i);
+                Mention.PRONOUN_TYPE pronomType = m_pronom.getPronounType();
+                Boolean pluralPronom =
+                        Mention.PRONOUN_TYPE.getIsPlural(m_pronom.toString().toLowerCase());
+
+                //If this isn't an anaphoric pronoun, we need not concern ourselves
+                if(pronomType == Mention.PRONOUN_TYPE.NONE || pronomType == Mention.PRONOUN_TYPE.DEICTIC)
+                    continue;
+
+                //Now that we know that m_i is a pronoun, we're going to collect
+                //all mentions (left and right) that could be coreferent
+                List<Mention> leftCandidates = new ArrayList<>();
+                List<Mention> rightCandidates = new ArrayList<>();
+                for(int j=0; j<mentions.size(); j++) {
+                    if (j == i)
+                        continue;
+                    Mention m_j = mentions.get(j);
+
+                    //Mention m_j is only considered a candidate for coreference when
+                    //  1) m_j is visual
+                    //  2) the (m_i, m_j) pairing has not yet been added
+                    //  3) m_j is non-pronominal
+                    Mention[] pair_ij = {m_pronom, m_j}, pair_ji = {m_j, m_pronom};
+                    if(m_j.getChainID().equals("0") ||
+                       m_j.getPronounType() != Mention.PRONOUN_TYPE.NONE ||
+                       Util.containsArr(corefPairs, pair_ij) ||
+                       Util.containsArr(corefPairs, pair_ji))
+                        continue;
+
+                    //Determine m_j's plurality
+                    boolean plural_j = false;
+                    String firstMod_j = null;
+                    if(m_j.getModifiers().length > 0)
+                        firstMod_j = m_j.getModifiers()[0];
+                    String pos_j = m_j.getHead().getPosTag();
+                    if(pos_j.equals("NNS") || pos_j.equals("NNPS") ||
+                       (firstMod_j != null &&
+                       !Arrays.asList(SINGULAR_MODS).contains(firstMod_j)))
+                        plural_j = true;
+
+                    //We only consider candidates that match the gender
+                    //of the pronoun (where neuter matches everything
+                    String gender_i = m_pronom.getGender();
+                    String gender_j = m_j.getGender();
+                    if(gender_i.equals("neuter") || gender_j.equals("neuter") || gender_i.equals(gender_j)) {
+                        //If this pronoun is in our underdefined list, it can
+                        //match anything; otherwise the candidates must have
+                        //matching plurality
+                        if(Arrays.asList(UNDERDEFINED_PRONOMS).contains(m_pronom.toString().toLowerCase()) ||
+                           pluralPronom != null && (pluralPronom == plural_j)) {
+                            if(j < i)
+                                leftCandidates.add(m_j);
+                            else if(i < j)
+                                rightCandidates.add(m_j);
+                        }
+                    }
+                }
+
+                Mention m_toAttach = null;
+                /* 1) Subjective / Objective */
+                //Attach to the furthest preceeding
+                if ((pronomType == Mention.PRONOUN_TYPE.SUBJECTIVE_SINGULAR ||
+                     pronomType == Mention.PRONOUN_TYPE.SUBJECTIVE_PLURAL ||
+                     pronomType == Mention.PRONOUN_TYPE.OBJECTIVE_SINGULAR ||
+                     pronomType == Mention.PRONOUN_TYPE.OBJECTIVE_PLURAL) &&
+                        !leftCandidates.isEmpty()) {
+
+                    //Furthest antecedent is left, index 0
+                    Mention ante = leftCandidates.get(0);
+                    //Prefer people/animal antecedents, where available
+                    for(int j=0; j<leftCandidates.size(); j++){
+                        Mention m_j = leftCandidates.get(j);
+                        if(m_j.getLexicalType().contains("people") ||
+                           m_j.getLexicalType().contains("animals")){
+                            ante = m_j; break;
+                        }
+                    }
+                    m_toAttach = ante;
+                } /* 2) Reflexive */ //Attach to the nearest preceding
+                else if ((pronomType == Mention.PRONOUN_TYPE.REFLEXIVE_SINGULAR ||
+                          pronomType == Mention.PRONOUN_TYPE.REFLEXIVE_PLURAL ||
+                          pronomType == Mention.PRONOUN_TYPE.RECIPROCAL) &&
+                        !leftCandidates.isEmpty()) {
+                    //Nearest antecedent is left, max idx
+                    Mention ante = leftCandidates.get(leftCandidates.size()-1);
+                    //Prefer people/animal antecedents, where available
+                    for(int j=leftCandidates.size()-1; j>= 0; j--){
+                        Mention m_j = leftCandidates.get(j);
+                        if(m_j.getLexicalType().contains("people") || m_j.getLexicalType().contains("animals")){
+                            ante = m_j; break;
+                        }
+                    }
+                    m_toAttach = ante;
+                } /* 3) Relative */ //Attach to nearest preceding except in special cases
+                else if (pronomType == Mention.PRONOUN_TYPE.RELATIVE ||
+                         m_pronom.toString().equals("that")) {
+                    Mention m_left = null;
+                    List<Token> interstl_left = new ArrayList<>();
+                    if(!leftCandidates.isEmpty()){
+                        m_left = leftCandidates.get(leftCandidates.size()-1);
+                        interstl_left = c.getInterstitialTokens(m_left, m_pronom);
+                    }
+                    Mention m_right = null;
+                    List<Chunk> interstl_right = new ArrayList<>();
+                    if(!rightCandidates.isEmpty()){
+                        m_right = rightCandidates.get(0);
+                        interstl_right = c.getInterstitialChunks(m_pronom, m_right);
+                    }
+
+                    //If this is Y in XofY, drop X
+                    if(interstl_left.size() == 1 && interstl_left.get(0).toString().equals("of") &&
+                            leftCandidates.size() > 1){
+                        m_left = leftCandidates.get(leftCandidates.size()-2);
+                    }
+
+                    //Determine if this is one of our identity cases
+                    boolean identityCase = false;
+                    if(interstl_right.size() == 1){
+                        String chunkType = interstl_right.get(0).getChunkType();
+                        String chunkStr = interstl_right.get(0).toString().toLowerCase();
+                        identityCase = chunkType.equals("VP") &&
+                                (StringUtil.containsElement(Arrays.asList(IDENTITY_TERMS), chunkStr) ||
+                                        chunkStr.equals("is") || chunkStr.equals("are"));
+                    }
+
+                    //Either attach on the right because we're an identity case,
+                    //or attach left if we have a valid antecedent
+                    if(identityCase)
+                        m_toAttach = m_right;
+                    else if(m_left != null)
+                        m_toAttach = m_left;
+                } /* 4) Other */ //Attach to nearest preceding
+                else if (pronomType == Mention.PRONOUN_TYPE.OTHER && !leftCandidates.isEmpty()) {
+                    m_toAttach = leftCandidates.get(leftCandidates.size()-1);
+                }
+
+                if(m_toAttach != null)
+                    corefPairs.add(new Mention[]{m_pronom, m_toAttach});
+            }
+        }
+        return corefPairs;
+    }
+
+    /**Attaches pronominal mentions according to heuristics,
+     * returning this Document's complete set of chains with
+     * the pronominal mentions included
+     *
+     * @return
+     */
+    public Set<Chain> getPronomCorefChains()
+    {
+        Map<Mention, String> mentionChainDict = new HashMap<>();
+
+        //Associate our regular mentions with their chain IDs
+        for(Mention m : getMentionList())
+            if(!m.getChainID().equals("0"))
+                mentionChainDict.put(m, m.getChainID());
+
+        //Perform heuristic pronomal coreference resolution
+        Set<Mention[]> pronomCorefPairs = getPronomCorefMentions();
+
+        //Add those pronouns' predicted chain IDs
+        for(Mention[] pair : pronomCorefPairs)
+            mentionChainDict.put(pair[0], pair[1].getChainID());
+
+        //Create chains from these associations
+        Set<Chain> corefChains = new HashSet<>();
+        Map<String, Set<Mention>> chainMentionDict = Util.invertMap(mentionChainDict);
+        for(String chainID : chainMentionDict.keySet()){
+            Chain c = new Chain(_ID, chainID);
+            chainMentionDict.get(chainID).forEach(m -> c.addMention(m));
+            _chainDict.get(chainID).getBoundingBoxSet().forEach(b -> c.addBoundingBox(b));
+            corefChains.add(c);
+        }
+        return corefChains;
+    }
+
+
     /**Cascades the given subset links, enforcing subset transitivity, such that
      * 1) if a sub b and b sub c -> a sub c
      * 2) if a sub b, c sub d, and b coref c -> a sub d
@@ -1088,4 +1280,7 @@ public class Document
         }
         return lineList;
     }
+
+
+
 }

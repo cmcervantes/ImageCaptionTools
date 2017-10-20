@@ -562,7 +562,7 @@ public class Mention extends Annotation
     {
         SUBJECTIVE_SINGULAR, SUBJECTIVE_PLURAL, OBJECTIVE_SINGULAR,
         OBJECTIVE_PLURAL, REFLEXIVE_SINGULAR, REFLEXIVE_PLURAL,
-        RECIPROCAL, RELATIVE, DEMONSTRATIVE, INDEFINITE, SEMI,
+        RECIPROCAL, RELATIVE, DEMONSTRATIVE, INDEFINITE, DEICTIC,
         OTHER, NONE;
 
         private static Map<PRONOUN_TYPE, Set<String>> typeWordSetDict;
@@ -672,14 +672,14 @@ public class Mention extends Annotation
             wordSet_sing.add("someone");
 
             //semi-pronouns introduce new elements to the caption
-            typeWordSetDict.get(SEMI).add("another");
-            typeWordSetDict.get(SEMI).add("other");
-            typeWordSetDict.get(SEMI).add("others");
-            typeWordSetDict.get(SEMI).add("one");
-            typeWordSetDict.get(SEMI).add("two");
-            typeWordSetDict.get(SEMI).add("three");
-            typeWordSetDict.get(SEMI).add("four");
-            typeWordSetDict.get(SEMI).add("some");
+            typeWordSetDict.get(DEICTIC).add("another");
+            typeWordSetDict.get(DEICTIC).add("other");
+            typeWordSetDict.get(DEICTIC).add("others");
+            typeWordSetDict.get(DEICTIC).add("one");
+            typeWordSetDict.get(DEICTIC).add("two");
+            typeWordSetDict.get(DEICTIC).add("three");
+            typeWordSetDict.get(DEICTIC).add("four");
+            typeWordSetDict.get(DEICTIC).add("some");
             wordSet_sing.add("another");
             wordSet_sing.add("other");
             wordSet_plural.add("others");
@@ -746,7 +746,7 @@ public class Mention extends Annotation
                     this == OBJECTIVE_PLURAL ||
                     this == REFLEXIVE_SINGULAR ||
                     this == REFLEXIVE_PLURAL ||
-                    this == RELATIVE || this == SEMI ||
+                    this == RELATIVE || this == DEICTIC ||
                     this == OTHER;
         }
     }

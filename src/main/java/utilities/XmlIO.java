@@ -239,4 +239,32 @@ public class XmlIO
         return null;
     }
 
+    public static Map<String, String> readSemEvalText(String filename)
+    {
+        Map<String, String> textDict = new HashMap<>();
+        try{
+            //open the file and parse it into an XML doc
+            File xmlFile = new File(filename);
+            DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+            DocumentBuilder builder = factory.newDocumentBuilder();
+            org.w3c.dom.Document doc = builder.parse(xmlFile);
+            doc.getDocumentElement().normalize();
+
+            NodeList nodeList = doc.getElementsByTagName("instance");
+
+            for(int i=0; i< nodeList.getLength(); i++) {
+                //get the relevant xml nodes from this object node
+                Node n = nodeList.item(i);
+                Element e = (Element) n;
+                String id = e.getAttribute("id");
+                String text = e.getElementsByTagName("text").item(0).getTextContent();
+                textDict.put(id, text);
+            }
+
+            } catch(Exception ex){
+            Logger.log(ex);
+        }
+        return textDict;
+    }
+
 }

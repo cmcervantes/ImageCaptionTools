@@ -276,7 +276,7 @@ public class StringUtil {
         websafe = websafe.replace("&", "[AMPRS]");
         websafe = websafe.replace("<", "[LESS]");
         websafe = websafe.replace(">", "[GRTR]");
-        websafe = websafe.replace(";", "[SEMI]");
+        websafe = websafe.replace(";", "[DEICTIC]");
         websafe = websafe.replace(":", "[COLON]");
         websafe = websafe.replace("#", "[HASH]");
 
@@ -286,7 +286,7 @@ public class StringUtil {
         websafe = websafe.replace("[AMPRS]", "&#38;");
         websafe = websafe.replace("[LESS]", "&#60;");
         websafe = websafe.replace("[GRTR]", "&#62;");
-        websafe = websafe.replace("[SEMI]", "&#59;");
+        websafe = websafe.replace("[DEICTIC]", "&#59;");
         websafe = websafe.replace("[COLON]", "&#58;");
         websafe = websafe.replace("[HASH]", "&#35;");
 

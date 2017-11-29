@@ -32,7 +32,7 @@ public class Mention extends Annotation
     //Lexicon dict, initialized with initializeDict
     private static Map<String, String> _flickr30kLexicon;
     private static Map<String, Set<String>> _cocoLexicon;
-    private static Map<String, Set<String>> _cocoLexicon_fallback;
+    private static Map<String, Set<String>> _cocoLexicon_relaxed;
     private static Map<String, String> _supercategoryDict;
 
     //member variables, set internally or during creation
@@ -373,7 +373,7 @@ public class Mention extends Annotation
     {
         _flickr30kLexicon = new HashMap<>();
         _cocoLexicon = new HashMap<>();
-        _cocoLexicon_fallback = new HashMap<>();
+        _cocoLexicon_relaxed = new HashMap<>();
         _supercategoryDict = new HashMap<>();
 
         //Load the flickr30k lexicon
@@ -407,7 +407,7 @@ public class Mention extends Annotation
                 String[] fallbacks = row[2].split("\\|");
                 String superCat = row[3];
                 _cocoLexicon.put(cat, new HashSet<>(Arrays.asList(heads)));
-                _cocoLexicon_fallback.put(cat, new HashSet<>(Arrays.asList(fallbacks)));
+                _cocoLexicon_relaxed.put(cat, new HashSet<>(Arrays.asList(fallbacks)));
                 _supercategoryDict.put(cat, superCat);
             }
         }
@@ -460,21 +460,25 @@ public class Mention extends Annotation
      * categories deliniated with /
      *
      * @param lemma
-     * @param includeFallback
+     * @param usedRelaxed
      * @return
      */
-    public static String getLexicalEntry_cocoCategory(String lemma, boolean includeFallback)
+    public static String getLexicalEntry_cocoCategory(String lemma, boolean usedRelaxed)
     {
         Set<String> categories = new HashSet<>();
         for(String category : _cocoLexicon.keySet()) {
             if (_cocoLexicon.get(category).contains(lemma))
                 categories.add(category);
-            else if(includeFallback && _cocoLexicon_fallback.get(category).contains(lemma))
+            else if(usedRelaxed && _cocoLexicon_relaxed.get(category).contains(lemma))
                 categories.add(category);
         }
 
         //Treat anything in our people lexicon as a fallback person category
-        if(includeFallback && getLexicalEntry_flickr(lemma).contains("people"))
+        if(usedRelaxed && getLexicalEntry_flickr(lemma).contains("people"))
+            categories.add("person");
+
+        //Treat person-pronouns as people
+        if(PRONOUN_TYPE.getIsPerson(lemma))
             categories.add("person");
 
         if(categories.isEmpty())
@@ -490,10 +494,10 @@ public class Mention extends Annotation
      * types deliniated with /
      *
      * @param m
-     * @param includeFallback
+     * @param usedRelaxed
      * @return
      */
-    public static String getLexicalEntry_cocoCategory(Mention m, boolean includeFallback)
+    public static String getLexicalEntry_cocoCategory(Mention m, boolean usedRelaxed)
     {
         List<Token> toks = m.getTokenList();
         String head = toks.get(toks.size()-1).getLemma().toLowerCase();
@@ -508,13 +512,17 @@ public class Mention extends Annotation
             if (_cocoLexicon.get(category).contains(head) ||
                 _cocoLexicon.get(category).contains(lastTwo))
                 categories.add(category);
-            else if(includeFallback && (_cocoLexicon_fallback.get(category).contains(head) ||
-                _cocoLexicon_fallback.get(category).contains(lastTwo)))
+            else if(usedRelaxed && (_cocoLexicon_relaxed.get(category).contains(head) ||
+                _cocoLexicon_relaxed.get(category).contains(lastTwo)))
                 categories.add(category);
         }
 
         //Treat anything in our people lexicon as a fallback person category
-        if(includeFallback && getLexicalEntry_flickr(m).contains("people"))
+        if(usedRelaxed && getLexicalEntry_flickr(m).contains("people"))
+            categories.add("person");
+
+        //Treat person-pronouns as people
+        if(PRONOUN_TYPE.getIsPerson(m.toString()))
             categories.add("person");
 
         if(categories.isEmpty())
@@ -522,6 +530,17 @@ public class Mention extends Annotation
         List<String> categoryList = new ArrayList<>(categories);
         Collections.sort(categoryList);
         return StringUtil.listToString(categoryList, "/");
+    }
+
+    /**Returns the coco category for a mention under the default assumption
+     * that we're using the relaxed lexicon
+     *
+     * @param m
+     * @return
+     */
+    public static String getLexicalEntry_cocoCategory(Mention m)
+    {
+        return getLexicalEntry_cocoCategory(m, true);
     }
 
     /**Returns the MSCOCO supercategory, given a category
@@ -565,135 +584,150 @@ public class Mention extends Annotation
         RECIPROCAL, RELATIVE, DEMONSTRATIVE, INDEFINITE, DEICTIC,
         OTHER, NONE;
 
-        private static Map<PRONOUN_TYPE, Set<String>> typeWordSetDict;
-        private static Set<String> wordSet_sing;
-        private static Set<String> wordSet_plural;
+        private static Map<PRONOUN_TYPE, Set<String>> _typeWordSetDict;
+        private static Set<String> _wordSet_sing;
+        private static Set<String> _wordSet_plural;
+        private static Set<String> _wordSet_people;
         static{
-            typeWordSetDict = new HashMap<>();
-            wordSet_sing = new HashSet<>();
-            wordSet_plural = new HashSet<>();
+            _typeWordSetDict = new HashMap<>();
+            _wordSet_sing = new HashSet<>();
+            _wordSet_plural = new HashSet<>();
+            _wordSet_people = new HashSet<>();
             for(PRONOUN_TYPE type : PRONOUN_TYPE.values())
-                typeWordSetDict.put(type, new HashSet<>());
+                _typeWordSetDict.put(type, new HashSet<>());
 
             //subjective singular - he / she / it
-            typeWordSetDict.get(SUBJECTIVE_SINGULAR).add("he");
-            typeWordSetDict.get(SUBJECTIVE_SINGULAR).add("she");
-            typeWordSetDict.get(SUBJECTIVE_SINGULAR).add("it");
-            wordSet_sing.add("he");
-            wordSet_sing.add("she");
-            wordSet_sing.add("it");
+            _typeWordSetDict.get(SUBJECTIVE_SINGULAR).add("he");
+            _typeWordSetDict.get(SUBJECTIVE_SINGULAR).add("she");
+            _typeWordSetDict.get(SUBJECTIVE_SINGULAR).add("it");
+            _wordSet_sing.add("he");
+            _wordSet_sing.add("she");
+            _wordSet_sing.add("it");
+            _wordSet_people.add("he");
+            _wordSet_people.add("she");
 
             //subjective plural - they
-            typeWordSetDict.get(SUBJECTIVE_PLURAL).add("they");
-            wordSet_plural.add("they");
+            _typeWordSetDict.get(SUBJECTIVE_PLURAL).add("they");
+            _wordSet_plural.add("they");
+            _wordSet_people.add("they");
 
             //objective singular - him / her / it
-            typeWordSetDict.get(OBJECTIVE_SINGULAR).add("him");
-            typeWordSetDict.get(OBJECTIVE_SINGULAR).add("her");
-            typeWordSetDict.get(OBJECTIVE_SINGULAR).add("it");
-            wordSet_sing.add("him");
-            wordSet_sing.add("her");
+            _typeWordSetDict.get(OBJECTIVE_SINGULAR).add("him");
+            _typeWordSetDict.get(OBJECTIVE_SINGULAR).add("her");
+            _typeWordSetDict.get(OBJECTIVE_SINGULAR).add("it");
+            _wordSet_sing.add("him");
+            _wordSet_sing.add("her");
+            _wordSet_people.add("him");
+            _wordSet_people.add("her");
 
             //objective plural - them
-            typeWordSetDict.get(OBJECTIVE_PLURAL).add("them");
-            wordSet_plural.add("them");
+            _typeWordSetDict.get(OBJECTIVE_PLURAL).add("them");
+            _wordSet_plural.add("them");
+            _wordSet_people.add("them");
 
             //reflexive singular - himself / herself / itself / oneself
-            typeWordSetDict.get(REFLEXIVE_SINGULAR).add("himself");
-            typeWordSetDict.get(REFLEXIVE_SINGULAR).add("herself");
-            typeWordSetDict.get(REFLEXIVE_SINGULAR).add("itself");
-            typeWordSetDict.get(REFLEXIVE_SINGULAR).add("oneself");
-            wordSet_sing.add("himself");
-            wordSet_sing.add("herself");
-            wordSet_sing.add("itself");
-            wordSet_sing.add("oneself");
+            _typeWordSetDict.get(REFLEXIVE_SINGULAR).add("himself");
+            _typeWordSetDict.get(REFLEXIVE_SINGULAR).add("herself");
+            _typeWordSetDict.get(REFLEXIVE_SINGULAR).add("itself");
+            _typeWordSetDict.get(REFLEXIVE_SINGULAR).add("oneself");
+            _wordSet_sing.add("himself");
+            _wordSet_sing.add("herself");
+            _wordSet_sing.add("itself");
+            _wordSet_sing.add("oneself");
+            _wordSet_people.add("himself");
+            _wordSet_people.add("herself");
 
             //reflexive plural - themselves
-            typeWordSetDict.get(REFLEXIVE_PLURAL).add("themselves");
-            wordSet_plural.add("themselves");
+            _typeWordSetDict.get(REFLEXIVE_PLURAL).add("themselves");
+            _wordSet_plural.add("themselves");
+            _wordSet_people.add("themselves");
 
             //reciprocal - each other / one another
-            typeWordSetDict.get(RECIPROCAL).add("each other");
-            typeWordSetDict.get(RECIPROCAL).add("each");
-            typeWordSetDict.get(RECIPROCAL).add("one another");
-            wordSet_plural.add("each other");
-            wordSet_plural.add("one another");
-            wordSet_plural.add("each");
+            _typeWordSetDict.get(RECIPROCAL).add("each other");
+            _typeWordSetDict.get(RECIPROCAL).add("each");
+            _typeWordSetDict.get(RECIPROCAL).add("one another");
+            _wordSet_plural.add("each other");
+            _wordSet_plural.add("one another");
+            _wordSet_plural.add("each");
 
             //relative - that / which / who / whose / whom / where / when
-            typeWordSetDict.get(RELATIVE).add("that");
-            typeWordSetDict.get(RELATIVE).add("which");
-            typeWordSetDict.get(RELATIVE).add("who");
-            typeWordSetDict.get(RELATIVE).add("whose");
-            typeWordSetDict.get(RELATIVE).add("whom");
-            typeWordSetDict.get(RELATIVE).add("where");
-            typeWordSetDict.get(RELATIVE).add("when");
-            typeWordSetDict.get(RELATIVE).add("what");
-            wordSet_sing.add("that");
-            wordSet_sing.add("which");
-            wordSet_sing.add("who");
-            wordSet_sing.add("whose");
-            wordSet_sing.add("whom");
-            wordSet_sing.add("where");
-            wordSet_sing.add("when");
-            wordSet_sing.add("what");
+            _typeWordSetDict.get(RELATIVE).add("that");
+            _typeWordSetDict.get(RELATIVE).add("which");
+            _typeWordSetDict.get(RELATIVE).add("who");
+            _typeWordSetDict.get(RELATIVE).add("whose");
+            _typeWordSetDict.get(RELATIVE).add("whom");
+            _typeWordSetDict.get(RELATIVE).add("where");
+            _typeWordSetDict.get(RELATIVE).add("when");
+            _typeWordSetDict.get(RELATIVE).add("what");
+            _wordSet_sing.add("that");
+            _wordSet_sing.add("which");
+            _wordSet_sing.add("who");
+            _wordSet_sing.add("whose");
+            _wordSet_sing.add("whom");
+            _wordSet_sing.add("where");
+            _wordSet_sing.add("when");
+            _wordSet_sing.add("what");
+            _wordSet_people.add("who");
+            _wordSet_people.add("whom");
 
             //demonstrative - this / that / these / those
-            typeWordSetDict.get(DEMONSTRATIVE).add("this");
-            typeWordSetDict.get(DEMONSTRATIVE).add("that");
-            typeWordSetDict.get(DEMONSTRATIVE).add("these");
-            typeWordSetDict.get(DEMONSTRATIVE).add("those");
-            typeWordSetDict.get(DEMONSTRATIVE).add("there");
-            wordSet_sing.add("this");
-            wordSet_sing.add("that");
-            wordSet_sing.add("there");
-            wordSet_plural.add("these");
-            wordSet_plural.add("those");
+            _typeWordSetDict.get(DEMONSTRATIVE).add("this");
+            _typeWordSetDict.get(DEMONSTRATIVE).add("that");
+            _typeWordSetDict.get(DEMONSTRATIVE).add("these");
+            _typeWordSetDict.get(DEMONSTRATIVE).add("those");
+            _typeWordSetDict.get(DEMONSTRATIVE).add("there");
+            _wordSet_sing.add("this");
+            _wordSet_sing.add("that");
+            _wordSet_sing.add("there");
+            _wordSet_plural.add("these");
+            _wordSet_plural.add("those");
 
 
             //indefinite - anything / anybody / anyone / something /
             //             somebody / someone / nothing / nobody / one /
             //             none / no one
-            typeWordSetDict.get(INDEFINITE).add("anything");
-            typeWordSetDict.get(INDEFINITE).add("anybody");
-            typeWordSetDict.get(INDEFINITE).add("anyone");
-            typeWordSetDict.get(INDEFINITE).add("something");
-            typeWordSetDict.get(INDEFINITE).add("somebody");
-            typeWordSetDict.get(INDEFINITE).add("someone");
-            typeWordSetDict.get(INDEFINITE).add("nothing");
-            typeWordSetDict.get(INDEFINITE).add("nobody");
-            typeWordSetDict.get(INDEFINITE).add("none");
-            typeWordSetDict.get(INDEFINITE).add("no one");
-            wordSet_plural.add("anything");
-            wordSet_plural.add("anybody");
-            wordSet_plural.add("anyone");
-            wordSet_sing.add("something");
-            wordSet_sing.add("somebody");
-            wordSet_sing.add("someone");
+            _typeWordSetDict.get(INDEFINITE).add("anything");
+            _typeWordSetDict.get(INDEFINITE).add("anybody");
+            _typeWordSetDict.get(INDEFINITE).add("anyone");
+            _typeWordSetDict.get(INDEFINITE).add("something");
+            _typeWordSetDict.get(INDEFINITE).add("somebody");
+            _typeWordSetDict.get(INDEFINITE).add("someone");
+            _typeWordSetDict.get(INDEFINITE).add("nothing");
+            _typeWordSetDict.get(INDEFINITE).add("nobody");
+            _typeWordSetDict.get(INDEFINITE).add("none");
+            _typeWordSetDict.get(INDEFINITE).add("no one");
+            _wordSet_plural.add("anything");
+            _wordSet_plural.add("anybody");
+            _wordSet_plural.add("anyone");
+            _wordSet_sing.add("something");
+            _wordSet_sing.add("somebody");
+            _wordSet_sing.add("someone");
+            _wordSet_people.add("somebody");
+            _wordSet_people.add("someone");
 
             //semi-pronouns introduce new elements to the caption
-            typeWordSetDict.get(DEICTIC).add("another");
-            typeWordSetDict.get(DEICTIC).add("other");
-            typeWordSetDict.get(DEICTIC).add("others");
-            typeWordSetDict.get(DEICTIC).add("one");
-            typeWordSetDict.get(DEICTIC).add("two");
-            typeWordSetDict.get(DEICTIC).add("three");
-            typeWordSetDict.get(DEICTIC).add("four");
-            typeWordSetDict.get(DEICTIC).add("some");
-            wordSet_sing.add("another");
-            wordSet_sing.add("other");
-            wordSet_plural.add("others");
-            wordSet_sing.add("one");
-            wordSet_plural.add("two");
-            wordSet_plural.add("three");
-            wordSet_plural.add("four");
-            wordSet_plural.add("some");
+            _typeWordSetDict.get(DEICTIC).add("another");
+            _typeWordSetDict.get(DEICTIC).add("other");
+            _typeWordSetDict.get(DEICTIC).add("others");
+            _typeWordSetDict.get(DEICTIC).add("one");
+            _typeWordSetDict.get(DEICTIC).add("two");
+            _typeWordSetDict.get(DEICTIC).add("three");
+            _typeWordSetDict.get(DEICTIC).add("four");
+            _typeWordSetDict.get(DEICTIC).add("some");
+            _wordSet_sing.add("another");
+            _wordSet_sing.add("other");
+            _wordSet_plural.add("others");
+            _wordSet_sing.add("one");
+            _wordSet_plural.add("two");
+            _wordSet_plural.add("three");
+            _wordSet_plural.add("four");
+            _wordSet_plural.add("some");
 
             //special pronouns are special
-            typeWordSetDict.get(OTHER).add("both");
-            typeWordSetDict.get(OTHER).add("all");
-            wordSet_plural.add("both");
-            wordSet_plural.add("all");
+            _typeWordSetDict.get(OTHER).add("both");
+            _typeWordSetDict.get(OTHER).add("all");
+            _wordSet_plural.add("both");
+            _wordSet_plural.add("all");
         }
 
         /**Returns whether given string s is a plural pronoun, false if
@@ -705,9 +739,9 @@ public class Mention extends Annotation
         public static Boolean getIsPlural(String s)
         {
             s = s.toLowerCase().trim();
-            if(wordSet_plural.contains(s))
+            if(_wordSet_plural.contains(s))
                 return true;
-            if(wordSet_sing.contains(s))
+            if(_wordSet_sing.contains(s))
                 return false;
             return null;
         }
@@ -728,7 +762,7 @@ public class Mention extends Annotation
                     return OTHER;
 
                 for(PRONOUN_TYPE t : PRONOUN_TYPE.values())
-                    if(typeWordSetDict.get(t).contains(normText))
+                    if(_typeWordSetDict.get(t).contains(normText))
                         return t;
             }
             return NONE;
@@ -748,6 +782,19 @@ public class Mention extends Annotation
                     this == REFLEXIVE_PLURAL ||
                     this == RELATIVE || this == DEICTIC ||
                     this == OTHER;
+        }
+
+        /**Returns whether the given string is a pronoun
+         * for which we have reasonable confidence refers
+         * to a person (he, she, they, etc.)
+         *
+         * @param s
+         * @return
+         */
+        public static boolean getIsPerson(String s)
+        {
+            s = s.toLowerCase().trim();
+            return _wordSet_people.contains(s);
         }
     }
 }

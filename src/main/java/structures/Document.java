@@ -1090,6 +1090,27 @@ public class Document
         return corefPairs;
     }
 
+    /**Associates mentions and boxes according to
+     * the dumb coco heuristic and returns the
+     * set of their pair IDs
+     *
+     * @return
+     */
+    public Set<String> getHeuristicGroundingIDs()
+    {
+        Set<String> groundingIDs = new HashSet<>();
+        for(Mention m : getMentionList()){
+            String mentionCatStr = Mention.getLexicalEntry_cocoCategory(m);
+            Set<String> mentionCats = new HashSet<>();
+            if(mentionCatStr != null)
+                mentionCats = new HashSet<>(Arrays.asList(mentionCatStr.split("/")));
+            for(BoundingBox b : _boxSet)
+                if(!mentionCats.isEmpty() && mentionCats.contains(b.getCategory()))
+                    groundingIDs.add(Document.getMentionBoxStr(m, b));
+        }
+        return groundingIDs;
+    }
+
     /**Attaches pronominal mentions according to heuristics,
      * returning this Document's complete set of chains with
      * the pronominal mentions included
@@ -1204,6 +1225,20 @@ public class Document
         return StringUtil.toKeyValStr(keys, vals);
     }
 
+    /**Returns the simple concatenation of the mention and box
+     * unique IDs separated by a pipe; implemented so all functions
+     * needing metion,box pairs can call a single function instead of
+     * relying on me to remember they're pipe-separated
+     *
+     * @param m
+     * @param b
+     * @return
+     */
+    public static String getMentionBoxStr(Mention m, BoundingBox b)
+    {
+        return m.getUniqueID() + "|" + b.getUniqueID();
+    }
+
     /**Returns a list of strings representing the given Document -- treating
      * the given chainSet as the source of coreferent information -- in the
      * CONLL 2012 format, the specifications for which can be found [here][link]
@@ -1280,7 +1315,5 @@ public class Document
         }
         return lineList;
     }
-
-
 
 }

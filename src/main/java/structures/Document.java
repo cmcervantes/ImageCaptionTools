@@ -435,17 +435,17 @@ public class Document
         height = d.height;
         width = d.width;
 
-        //grab the boxes from d and add them to our chains
-        for(Chain c : d.getChainSet()){
-            //It's possible - in the old data - for chains in
-            //coref files to not appear in the entities strings;
-            //drop them
-            if(_chainDict.containsKey(c.getID())){
-                for(BoundingBox b : c.getBoundingBoxSet())
-                    _chainDict.get(c.getID()).addBoundingBox(b);
+        //Copy over all the boxes
+        _boxSet = new HashSet<>(d.getBoundingBoxSet());
+        Map<Integer, BoundingBox> boxDict = new HashMap<>();
+        _boxSet.forEach(b -> boxDict.put(b.getIdx(), b));
 
-                //Since the box annotations also contain the scene flag,
-                //add that here as well
+        //Associate boxes with chains, according to the document
+        for(Chain c : d.getChainSet()) {
+            if(_chainDict.containsKey(c.getID())){
+                for(BoundingBox b : c.getBoundingBoxSet()){
+                    _chainDict.get(c.getID()).addBoundingBox(boxDict.get(b.getIdx()));
+                }
                 _chainDict.get(c.getID()).isScene = c.isScene;
                 _chainDict.get(c.getID()).isOrigNobox = c.isOrigNobox;
             }

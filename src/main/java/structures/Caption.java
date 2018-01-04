@@ -1221,6 +1221,7 @@ public class Caption extends Annotation {
         int tokenIdx_chunkStart = -1;
         int tokenIdx_mentionStart = -1;
         int chunkIdx_start = -1;
+        boolean expectingClosingPPBracket = false;
         for(String s : captionArr) {
             s = s.trim();
             if (s.startsWith("[EN")) {
@@ -1235,22 +1236,29 @@ public class Caption extends Annotation {
                 tokenIdx_mentionStart = c._tokenList.size();
                 chunkIdx_start = c._chunkList.size();
             } else if (s.startsWith("[")) {
-                if (chunkIdx > -1) {
+                if (chunkIdx > -1 && s.equals("[PP")){
+                    System.err.println("WARNING: Ignoring internal PP bracket for v1 annotations for " +
+                            docID + "#" + capIdx);
+                    expectingClosingPPBracket = true;
+                } else if(chunkIdx > -1){
                     throw new Exception("Unexpected new chunk bracket (" +
                             docID + "#" + capIdx + ")\n" + "Tokens thusfar:\n" +
                             StringUtil.listToString(c._tokenList, " "));
+                } else {
+                    //Drop the special chunk types from the DenotationGraph
+                    //pipeline
+                    chunkType = s.replace("[", "");
+                    if(chunkType.contains("/"))
+                        chunkType = chunkType.split("/")[0];
+
+                    chunkIdx = chunkCounter;
+                    tokenIdx_chunkStart = c._tokenList.size();
                 }
-
-                //Drop the special chunk types from the DenotationGraph
-                //pipeline
-                chunkType = s.replace("[", "");
-                if(chunkType.contains("/"))
-                    chunkType = chunkType.split("/")[0];
-
-                chunkIdx = chunkCounter;
-                tokenIdx_chunkStart = c._tokenList.size();
             } else if (s.equals("]")) {
-                if (chunkIdx > -1) {
+                if(expectingClosingPPBracket){
+                    // Just ignore this closing bracket
+                    expectingClosingPPBracket = false;
+                } else if (chunkIdx > -1) {
                     Chunk ch = new Chunk(c._docID, c._idx, chunkIdx, chunkType,
                             c._tokenList.subList(tokenIdx_chunkStart,
                                     c._tokenList.size()));

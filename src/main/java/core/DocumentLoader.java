@@ -266,13 +266,13 @@ public class DocumentLoader
         docIDs.forEach(id -> docIDs_enclosed.add("'" + id + "'"));
         String docIdStr = "(" + StringUtil.listToString(docIDs_enclosed, ",") + ")";
 
-        try{
-            Logger.log("Initializing Documents from <image>");
-            query = "SELECT img_id, height, width, "+
-                    "cross_val, reviewed, img_url FROM image "+
-                    "WHERE img_id IN " + docIdStr;
+        Logger.log("Initializing Documents from <image>");
+        query = "SELECT img_id, height, width, "+
+                "cross_val, reviewed, img_url FROM image "+
+                "WHERE img_id IN " + docIdStr;
+        try {
             rs = conn.query(query);
-            while(rs.next()){
+            while (rs.next()) {
                 Document d = new Document(rs.getString("img_id"));
                 d.height = rs.getInt("height");
                 d.width = rs.getInt("width");
@@ -281,11 +281,17 @@ public class DocumentLoader
                 d.imgURL = rs.getString("img_url");
                 docDict.put(d.getID(), d);
             }
+        } catch(Exception ex){
+            Logger.log(ex);
+            Logger.log("Error loading <image> table; cannot load documents");
+            return null;
+        }
 
-            Logger.log("Building Tokens and Captions from <token>");
-            query = "SELECT img_id, caption_idx, token_idx, " +
-                    "token, lemma, pos_tag FROM token "+
-                    "WHERE img_id IN " + docIdStr;
+        Logger.log("Building Tokens and Captions from <token>");
+        query = "SELECT img_id, caption_idx, token_idx, " +
+                "token, lemma, pos_tag FROM token "+
+                "WHERE img_id IN " + docIdStr;
+        try{
             rs = conn.query(query);
             while(rs.next()){
                 String imgID = rs.getString("img_id");
@@ -306,11 +312,17 @@ public class DocumentLoader
                 }
                 c.addToken(t);
             }
+        } catch(Exception ex){
+            Logger.log(ex);
+            Logger.log("Error loading <token> table; cannot load documents");
+            return null;
+        }
 
-            Logger.log("Partitioning Tokens into Chunks with <chunk>");
-            query = "SELECT img_id, caption_idx, chunk_idx, " +
-                    "start_token_idx, end_token_idx, chunk_type "+
-                    "FROM chunk WHERE img_id IN " + docIdStr;
+        Logger.log("Partitioning Tokens into Chunks with <chunk>");
+        query = "SELECT img_id, caption_idx, chunk_idx, " +
+                "start_token_idx, end_token_idx, chunk_type "+
+                "FROM chunk WHERE img_id IN " + docIdStr;
+        try{
             rs = conn.query(query);
             while(rs.next()){
                 String imgID = rs.getString("img_id");
@@ -322,12 +334,18 @@ public class DocumentLoader
                 docDict.get(imgID).getCaption(captionIdx).addChunk(chunkIdx,
                         chunkType, startTokenIdx, endTokenIdx);
             }
+        } catch(Exception ex){
+            Logger.log(ex);
+            Logger.log("Error loading <chunk> table; cannot load documents");
+            return null;
+        }
 
-            Logger.log("Loading bounding boxes from <box>");
-            query = "SELECT img_id, box_id, x_min, y_min, " +
-                    "x_max, y_max, category, super_category FROM box " +
-                    "WHERE img_id IN " + docIdStr;
-            Map<String, Map<Integer, BoundingBox>> boxDict = new HashMap<>();
+        Logger.log("Loading bounding boxes from <box>");
+        query = "SELECT img_id, box_id, x_min, y_min, " +
+                "x_max, y_max, category, super_category FROM box " +
+                "WHERE img_id IN " + docIdStr;
+        Map<String, Map<Integer, BoundingBox>> boxDict = new HashMap<>();
+        try{
             rs = conn.query(query);
             while(rs.next()){
                 String imgID = rs.getString("img_id");
@@ -344,13 +362,17 @@ public class DocumentLoader
                     new BoundingBox(imgID, boxID, xMin,
                     yMin, xMax, yMax, category, superCat));
             }
+        } catch(Exception ex){
+            Logger.log(ex);
+        }
 
-            Logger.log("Loading chains from <chain> and associating them with "+
-                    "the bounding boxes from the previous step");
-            query = "SELECT img_id, chain_id, assoc_box_ids, " +
-                    "is_scene, is_orig_nobox FROM chain "+
-                    "WHERE img_id IN " + docIdStr;
-            Map<String, Map<Integer, Set<String>>> boxChainDict = new HashMap<>();
+        Logger.log("Loading chains from <chain> and associating them with "+
+                "the bounding boxes from the previous step");
+        query = "SELECT img_id, chain_id, assoc_box_ids, " +
+                "is_scene, is_orig_nobox FROM chain "+
+                "WHERE img_id IN " + docIdStr;
+        Map<String, Map<Integer, Set<String>>> boxChainDict = new HashMap<>();
+        try{
             rs = conn.query(query);
             while(rs.next()){
                 String imgID = rs.getString("img_id");
@@ -388,12 +410,18 @@ public class DocumentLoader
             //add chain 0 to all documents
             for(Document d : docDict.values())
                 d.addChain(new Chain(d.getID(), "0"));
+        } catch(Exception ex){
+            Logger.log(ex);
+            Logger.log("Error loading <chain> table; cannot load documents");
+            return null;
+        }
 
-            Logger.log("Partitioning Tokens into Mentions with <mention>");
-            query = "SELECT img_id, caption_idx, mention_idx, " +
-                    "start_token_idx, end_token_idx, card_str, " +
-                    "chain_id, lexical_type FROM mention " +
-                    "WHERE img_id IN " + docIdStr;
+        Logger.log("Partitioning Tokens into Mentions with <mention>");
+        query = "SELECT img_id, caption_idx, mention_idx, " +
+                "start_token_idx, end_token_idx, card_str, " +
+                "chain_id, lexical_type FROM mention " +
+                "WHERE img_id IN " + docIdStr;
+        try{
             rs = conn.query(query);
             while(rs.next()){
                 String imgID = rs.getString("img_id");
@@ -416,12 +444,18 @@ public class DocumentLoader
                         lexicalType, chainID, card, startTokenIdx, endTokenIdx);
                 docDict.get(imgID).addMentionToChain(m);
             }
+        } catch(Exception ex){
+            Logger.log(ex);
+            Logger.log("Error loading <mention> table; cannot load documents");
+            return null;
+        }
 
-            Logger.log("Reading dependency trees from <dependency>");
-            query = "SELECT img_id, caption_idx, gov_token_idx, " +
-                    "dep_token_idx, relation FROM dependency " +
-                    "WHERE img_id IN " + docIdStr;
-            Map<String, Map<Integer, Set<String>>> depDict = new HashMap<>();
+        Logger.log("Reading dependency trees from <dependency>");
+        query = "SELECT img_id, caption_idx, gov_token_idx, " +
+                "dep_token_idx, relation FROM dependency " +
+                "WHERE img_id IN " + docIdStr;
+        Map<String, Map<Integer, Set<String>>> depDict = new HashMap<>();
+        try{
             rs = conn.query(query);
             while(rs.next()){
                 String imgID = rs.getString("img_id");

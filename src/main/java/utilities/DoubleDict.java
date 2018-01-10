@@ -354,6 +354,18 @@ public class DoubleDict<K>
         return sb.toString();
     }
 
+    public void printPercentageDict(K totalKey)
+    {
+        StringBuilder sb = new StringBuilder();
+        for(K key : getSortedByValKeys(true)){
+            if(totalKey == key)
+                continue;
+            System.out.printf("%s: %.2f%%\n",
+                    key.toString(), 100.0 * dict.get(key) /
+                    dict.get(totalKey));
+        }
+    }
+
     /**Returns a <i>DoubleDict</i> where the keys are the
      * values of the given <b>countDict</b>, and the values are
      * the number of keys with which they were associated.

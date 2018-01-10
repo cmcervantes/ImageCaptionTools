@@ -184,7 +184,7 @@ public class Mention extends Annotation
         _lexType = type;
     }
 
-    /* Getters */
+    /* Getters & Setters */
     public int getCaptionIdx(){return _captionIdx;}
     public Cardinality getCardinality(){return _card;}
     public Token getHead(){return _tokenList.get(_tokenList.size()-1);}
@@ -192,6 +192,12 @@ public class Mention extends Annotation
     public List<Chunk> getChunkList(){return _chunkList;}
     public String getChainID(){return _chainID;}
     public String getLexicalType(){return _lexType;}
+    public void setChainID(String chainID)
+    {
+        _chainID = chainID;
+        for(Token t : _tokenList)
+            t.chainID = _chainID;
+    }
 
     /**Sets the lexical type of this mention
      * DEPRECATED: lexical types should not be set in

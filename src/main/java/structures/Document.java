@@ -161,6 +161,7 @@ public class Document
     public boolean getIsDev(){ return crossVal == 0;}
     public int getCrossVal(){return crossVal;}
 
+
     /**Returns the list of mentions in this Document, ordered by
      * their caption and the order within their caption
      *
@@ -1144,6 +1145,7 @@ public class Document
         }
         return corefChains;
     }
+
 
 
     /**Cascades the given subset links, enforcing subset transitivity, such that

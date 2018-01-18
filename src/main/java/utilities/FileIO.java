@@ -399,6 +399,14 @@ public class FileIO
         return filenameList;
     }
 
+    /**Returns a string representation of a caption and given
+     * mention/chain associations that can be dropped into
+     * Latex as a color-coded example
+     *
+     * @param c
+     * @param mentionIdDict
+     * @return
+     */
     public static String
         getLatexColorCodedCaption(Caption c,
                                   Map<Mention, String> mentionIdDict)

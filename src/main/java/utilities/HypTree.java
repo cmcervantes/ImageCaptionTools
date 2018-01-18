@@ -7,7 +7,7 @@ import java.util.*;
  * element must be unique within the tree, enabling
  * constant time retrieval and O(n) traversal
  *
- * @param <T>
+ * @uthor ccervantes
  */
 public class HypTree {
     private List<HypNode> _rootBranches;

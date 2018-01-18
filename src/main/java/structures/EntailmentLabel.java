@@ -1,6 +1,10 @@
 package structures;
 
-
+/**Enumerable for the three-way entailment
+ * task: entailment, contradiction, or neutral
+ *
+ * @author ccervantes
+ */
 public enum EntailmentLabel
 {
     ENTAILMENT, CONTRADICTION, NEUTRAL, UNKNOWN;

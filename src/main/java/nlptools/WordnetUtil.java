@@ -11,11 +11,9 @@ import utilities.Logger;
 import java.io.File;
 import java.util.*;
 
-/**The WordnetUtil - unlike everything else
- * currently in the legacy package - is actually
- * meant to be instantiated! The resulting
- * object will contain a Wordnet dictionary
- * and methods for interacting with it
+/**A WordnetUtil object contains
+ * a Wordnet dictionary and methods
+ * for interacting with it
  *
  * @author ccervantes
  */
@@ -40,6 +38,8 @@ public class WordnetUtil
 
     /**Constructor that creates the WordNet dictionary
      * using a local wordnet directory.
+     *
+     * @author ccervantes
      */
     public WordnetUtil(String wordnetDirPath)
     {
@@ -148,40 +148,12 @@ public class WordnetUtil
         }
     }
 
-    public HypTree getHyponymTree(String lemma)
-    {
-        HypTree tree = new HypTree(lemma);
-
-        //iterate over all the stems of this lemma
-        for(String stem : wnStemmer.findStems(lemma, POS.NOUN)) {
-            IIndexWord idxWord = wordnetDict.getIndexWord(stem, POS.NOUN);
-
-            if (idxWord != null) {
-                //We keep only those senses that have frequency counts > 0;
-                //If no frequency counts are greater than 0; take only the
-                //first sense
-                List<IWordID> wordIDs = new ArrayList<>();
-                for (IWordID wordID : idxWord.getWordIDs()) {
-                    IWord word = wordnetDict.getWord(wordID);
-                    if (wordnetDict.getSenseEntry(word.getSenseKey()).getTagCount() > 0)
-                        wordIDs.add(wordID);
-                }
-                if (wordIDs.isEmpty())
-                    wordIDs.add(idxWord.getWordIDs().get(0));
-                wordIDs = wordIDs.subList(0, Math.min(3, wordIDs.size()));
-                for (IWordID wordID : wordIDs) {
-                    IWord word = wordnetDict.getWord(wordID);
-                    int tagCount = wordnetDict.getSenseEntry(word.getSenseKey()).getTagCount();
-                    ISynset synset = word.getSynset();
-                    HypTree.HypNode node = tree.addChild(synset, null, tagCount);
-                    _buildHyponymTree(synset, node, tree);
-                }
-            }
-        }
-
-        return tree;
-    }
-
+    /**Recursive tree-building for hypernym synset trees
+     *
+     * @param synset
+     * @param lastNode
+     * @param tree
+     */
     private void _buildHyponymTree(ISynset synset, HypTree.HypNode lastNode, HypTree tree)
     {
         //Add the hypernyms of this synset to the tree and recurse

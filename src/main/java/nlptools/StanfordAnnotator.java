@@ -32,11 +32,13 @@ import java.util.*;
  *
  * Full list in
  * https://stanfordnlp.github.io/CoreNLP/annotators.html
+ *
+ *
+ * @author ccervantes
  */
 public class StanfordAnnotator
 {
     private StanfordCoreNLP _pipeline;
-
 
     /**The workflow for StanfordAnnotator is to create
      * objects through the static functions rather than

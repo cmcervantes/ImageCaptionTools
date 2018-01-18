@@ -7,6 +7,8 @@ import java.util.List;
 
 /**Chunks serve as collections of Tokens
  * with a particular type (NP, VP, etc)
+ *
+ * @author ccervantes
  */
 public class Chunk extends Annotation
 {

@@ -16,7 +16,7 @@ import java.util.Map;
  * the Argparse objects is much more flexible,
  * but is messier as a result
  *
- * @ccervantes
+ * @@author ccervantes
  */
 public class ArgParser
 {

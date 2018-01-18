@@ -134,7 +134,6 @@ public class Logger
         }
     }
 
-
     /**Logs "tic"; sets the internal tic value to now;
      * meant to be used with toc()
      */

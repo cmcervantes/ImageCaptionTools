@@ -113,6 +113,10 @@ public class Document
         _init(ID);
     }
 
+    /**Constructor in case, for some reason, we need an empty document
+     *
+     */
+    @Deprecated
     protected Document()
     {
         _init("");
@@ -317,6 +321,14 @@ public class Document
         return false;
     }
 
+    /**Returns whether the boxes for chain c1 are a subset
+     * of the boxes for chain if and only if both chains
+     * have boxes
+     *
+     * @param c1
+     * @param c2
+     * @return
+     */
     private boolean getBoxesAreSubset(Chain c1, Chain c2)
     {
         Set<BoundingBox> boxes_1 = c1.getBoundingBoxSet();
@@ -1145,8 +1157,6 @@ public class Document
         }
         return corefChains;
     }
-
-
 
     /**Cascades the given subset links, enforcing subset transitivity, such that
      * 1) if a sub b and b sub c -> a sub c

@@ -3,13 +3,23 @@ Table of Contents
 =================================================
 1) Introduction
 2) Build
-3) Usage
-4) Changelog
+3) Modules
+    3a) core
+    3b) nlptools
+    3c) structures
+    3d) utilities
 
 =================================================
 1) Introduction
 =================================================
-TODO: Write an intro
+The ImageCaptionTools project is a suite of tools useful when
+working with image caption data. While this project is far from
+stand-alone, the intent of separating the functionality represented
+here from the ImageCaptionLearn project was to enable other
+students working with the same data to easily access these utilities.
+
+ImageCaptionTools encapsulates both the necessary components for
+working with image caption data and miscellaneous Java utilities.
 
 =================================================
 2) Build
@@ -31,9 +41,8 @@ ImageCaptionTools
 From there, maven (by way of the accompanying pom.xml) should
 compile the src into the target dir, which will contain a
     ImageCaptionTools-VERSION.jar
-However, the point of breaking the ImageCaptionTools into their
-own project is to enable their inclusion as a maven dependency.
-To do so, include the following
+In order to include ImageCaptionTools into other projects
+(e.g. ImageCaptionLearn) as a Maven dependency, include the following
     <dependency>
         <groupId>edu.illinois.cs.cl</groupId>
         <artifactId>ImageCaptionTools</artifactId>
@@ -41,3 +50,32 @@ To do so, include the following
     </dependency>
 
 
+=================================================
+3) Modules
+=================================================
+ImageCaptionTools are organized into several modules,
+which tie together broad thematic elements. These include
+
+    a) core
+       Containing only the DocumentLoader, the core is
+       essentially the main file for ImageCaptionTools.
+       The DocumentLoader reads image caption data from
+       a database and packages that data into the
+       structures found in the structures package
+    b) nlptools
+       Housing utilities for external NLP resources,
+       nlptools contains wrappers for Stanford's Annotator,
+       Word2Vec, Wordnet, and the Illinois CogComp Annotator
+    c) structures
+       The structures module contains the objects necessary to
+       represent the highly structured nature of image caption data.
+       Documents are associated with sets of captions and an image,
+       captions can be represented as sequences of chunks, mentions,
+       and tokens, and coreferent mentions are clustered into chains,
+       which can be associated with bounding boxes.
+    d) utilities
+       The utilities module contains all the miscellaneous
+       utilities, including but not limited to functions for
+       interacting with databases (DBConnector), writing
+       files (FileIO), manipulating strings (StringUtil), and
+       computing statistics (StatisticalUtil)

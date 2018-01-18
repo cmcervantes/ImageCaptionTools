@@ -13,6 +13,12 @@ import java.util.List;
 /**Wrapper for the Stanford Dependency Parser
  * (default model)
  *
+ * NOTE: While I want to deprecate this,
+ *       there's apparently not an easy way
+ *       to get the dependency trees out of the more
+ *       up-to-date annotator found in StanfordAnnotator
+ *
+ * @author ccervantes
  */
 public class StanfordParser
 {

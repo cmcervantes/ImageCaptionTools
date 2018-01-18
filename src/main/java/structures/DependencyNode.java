@@ -14,6 +14,8 @@ import java.util.Set;
  *
  * Various searching functions assume the use of the root node,
  * as searches proceed through dependents only
+ *
+ * @author ccervantes
  */
 public class DependencyNode implements Serializable
 {

@@ -14,6 +14,7 @@ import java.util.*;
  * have Mentions, which _contain_, but are not themselves,
  * NP chunks.
  *
+ * @author ccervantes
  */
 public class Mention extends Annotation
 {

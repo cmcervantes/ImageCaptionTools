@@ -10,18 +10,13 @@ import java.util.*;
 /**DocumentLoader houses static functions to load Document
  * objects from various places, including .coref files,
  * Flickr30kEntities files, and databases
+ *
+ * @author ccervantes
  */
 public class DocumentLoader
 {
 
-    public static void main(String[] args)
-    {
-        String[] mscoco_mysqlParams = {"ccervan2.web.engr.illinois.edu",
-                "ccervan2_root", "thenIdefyheaven!", "ccervan2_coco"};
-        DBConnector conn = new DBConnector(mscoco_mysqlParams[0], mscoco_mysqlParams[1],
-                mscoco_mysqlParams[2], mscoco_mysqlParams[3]);
-        getDocumentSet(conn, 0, true, 100);
-    }
+    public static void main(String[] args) {}
 
     /**Returns a set of Documents, based on a .coref file
      * and the specified lexicon and word list directories
@@ -59,12 +54,15 @@ public class DocumentLoader
         return docSet;
     }
 
-    /**Returns a set of Documents, based on a coref file, bounding box file, and image info file
+    /**Returns a set of Documents, based on a coref file,
+     * bounding box file, and image info file
      * (written for loading MSCOCO images)
      *
      * @param corefFile
      * @param bboxFile
      * @param imgFile
+     * @param lexiconDir
+     * @param wordListDir
      * @return
      */
     public static Collection<Document> getDocumentSet(String corefFile, String bboxFile,
@@ -268,7 +266,8 @@ public class DocumentLoader
 
         Logger.log("Initializing Documents from <image>");
         query = "SELECT img_id, height, width, "+
-                "cross_val, reviewed, img_url FROM image "+
+                "cross_val, reviewed, img_url, anno_comments "+
+                "FROM image "+
                 "WHERE img_id IN " + docIdStr;
         try {
             rs = conn.query(query);
@@ -279,6 +278,7 @@ public class DocumentLoader
                 d.crossVal = Util.castInteger(rs.getObject("cross_val"));
                 d.reviewed = rs.getBoolean("reviewed");
                 d.imgURL = rs.getString("img_url");
+                d.comments = rs.getString("anno_comments");
                 docDict.put(d.getID(), d);
             }
         } catch(Exception ex){
@@ -718,6 +718,13 @@ public class DocumentLoader
     }
 
     /**
+     *
+     * @param docSet
+     * @param outRoot
+     */
+
+    /**Given a collection of documents, exports three files:
+     * one of the images, one for the captions, and one for the bounding boxes
      *
      * @param docSet
      * @param outRoot

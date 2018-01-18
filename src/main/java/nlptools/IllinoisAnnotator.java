@@ -28,13 +28,15 @@ import java.util.List;
 
 /**IllinoisAnnotators wraps tagging and chunking
  * functions from Illinois CogComp
+ *
+ * @author ccervantes
  */
 public class IllinoisAnnotator
 {
     private IllinoisLemmatizer _lemmatizer;
     private POSTaggerKnown _posTaggerKnown;
     private POSTaggerUnknown _posTaggerUnknown;
-    private wordForm __wordForm;
+    private wordForm _wordForm;
     private Chunker _chunker;
 
 
@@ -61,7 +63,7 @@ public class IllinoisAnnotator
         _posTaggerUnknown =
                 new POSTaggerUnknown(modelDir + "pos_unk.lc",
                         modelDir + "pos_unk.lex");
-        __wordForm = new wordForm();
+        _wordForm = new wordForm();
         _lemmatizer = new IllinoisLemmatizer();
     }
 
@@ -125,7 +127,7 @@ public class IllinoisAnnotator
     private String predictPosTag(Token word)
     {
         String predTag;
-        if(baselineTarget.getInstance().observed(__wordForm.discreteValue(word)))
+        if(baselineTarget.getInstance().observed(_wordForm.discreteValue(word)))
             predTag = _posTaggerKnown.discreteValue(word);
         else
             predTag = _posTaggerUnknown.discreteValue(word);

@@ -18,8 +18,7 @@ public class Caption extends Annotation {
     private List<Mention> _mentionList;
     private DependencyNode _rootNode;
 
-    /**
-     * Default Caption constructor
+    /**Default Caption constructor
      *
      * @param docID
      * @param idx
@@ -33,8 +32,7 @@ public class Caption extends Annotation {
         initMentionList();
     }
 
-    /**
-     * Constructs a Caption without tokens, which
+    /**Constructs a Caption without tokens, which
      * should be added with addToken()
      *
      * @param docID
@@ -48,8 +46,7 @@ public class Caption extends Annotation {
         _mentionList = new ArrayList<>();
     }
 
-    /**
-     * Empty Caption constructor for use during static
+    /**Empty Caption constructor for use during static
      * Caption construction
      */
     private Caption() {
@@ -58,8 +55,7 @@ public class Caption extends Annotation {
         _mentionList = new ArrayList<>();
     }
 
-    /**
-     * Adds the given Token to the internal list
+    /**Adds the given Token to the internal list
      * in the position determined by token index
      *
      * @param t
@@ -70,8 +66,7 @@ public class Caption extends Annotation {
         _tokenList.add(insertionIdx, t);
     }
 
-    /**
-     * Creates a new Chunk with the tokens at the given
+    /**Creates a new Chunk with the tokens at the given
      * ranges and type, adding it into the internal chunk
      * list based on the given index
      *
@@ -94,8 +89,7 @@ public class Caption extends Annotation {
         }
     }
 
-    /**
-     * Adds a new Mention with the given attributes and
+    /**Adds a new Mention with the given attributes and
      * returns it
      *
      * @param idx
@@ -134,8 +128,7 @@ public class Caption extends Annotation {
         return m;
     }
 
-    /**
-     * Constructs the dependency tree (and sets the internal root node)
+    /**Constructs the dependency tree (and sets the internal root node)
      * based on the given dependency strings, which must be in the
      * format gov_token_idx|relation|dep_token_idx
      *
@@ -182,8 +175,7 @@ public class Caption extends Annotation {
         } while (addedNode);
     }
 
-    /**
-     * Returns the Chunk immediately left-adjacent to ch;
+    /**Returns the Chunk immediately left-adjacent to ch;
      * null if ch is the first chunk
      *
      * @param ch
@@ -195,8 +187,7 @@ public class Caption extends Annotation {
         return null;
     }
 
-    /**
-     * Returns the Chunk immediately right-adjacent to ch;
+    /**Returns the Chunk immediately right-adjacent to ch;
      * null if ch is the last chunk
      *
      * @param ch
@@ -225,8 +216,7 @@ public class Caption extends Annotation {
         return _rootNode;
     }
 
-    /**
-     * Returns a dataset-unique ID for this caption, in the form
+    /**Returns a dataset-unique ID for this caption, in the form
      * docID#capIdx
      *
      * @return
@@ -235,8 +225,7 @@ public class Caption extends Annotation {
         return _docID + "#" + _idx;
     }
 
-    /**
-     * Returns a list of interstitial chunks between chunks c1 and c2;
+    /**Returns a list of interstitial chunks between chunks c1 and c2;
      * empty list if c1 is adjacent to c2
      *
      * @param c1
@@ -253,8 +242,7 @@ public class Caption extends Annotation {
         return new ArrayList<>();
     }
 
-    /**
-     * Returns a list of interstitial chunks between mentions m1 and m2;
+    /**Returns a list of interstitial chunks between mentions m1 and m2;
      * empty list if m1 is adjacent to m2
      *
      * @param m1
@@ -271,8 +259,7 @@ public class Caption extends Annotation {
         return getInterstitialChunks(lastChunk_1, firstChunk_2);
     }
 
-    /**
-     * Returns a list of interstitial tokens between chunks c1 and c2;
+    /**Returns a list of interstitial tokens between chunks c1 and c2;
      * empty list if c1 is adjacent to c2
      *
      * @param c1
@@ -289,8 +276,7 @@ public class Caption extends Annotation {
         return new ArrayList<>();
     }
 
-    /**
-     * Returns a list of interstitial tokens between mentions m1 and m2;
+    /**Returns a list of interstitial tokens between mentions m1 and m2;
      * empty list if m1 is adjacent to m2
      *
      * @param m1
@@ -307,8 +293,7 @@ public class Caption extends Annotation {
         return new ArrayList<>();
     }
 
-    /**
-     * Returns the text of this caption
+    /**Returns the text of this caption
      *
      * @return
      */
@@ -317,8 +302,7 @@ public class Caption extends Annotation {
         return StringUtil.listToString(_tokenList, " ");
     }
 
-    /**
-     * Returns this caption's attributes as a key:value; string
+    /**Returns this caption's attributes as a key:value; string
      *
      * @return - key-value string of caption attributes
      */
@@ -1054,41 +1038,6 @@ public class Caption extends Annotation {
     private void initChunkList()
     {
         _chunkList = new ArrayList<>();
-        /*
-        int prevChunkIdx = -1;
-        String prevChunkType = null;
-        List<Token> chunkTokenList = new ArrayList<>();
-        for(int tIdx=0; tIdx < _tokenList.size(); tIdx++) {
-            Token t = _tokenList.get(tIdx);
-            int currentChunkIdx = t.chunkIdx;
-            String currentChunkType = t.chunkType;
-
-            //this token is part of the currently in-progress
-            //chunk if the indices are the same
-            boolean sameChunkIdx = currentChunkIdx == prevChunkIdx;
-            if(sameChunkIdx)
-                chunkTokenList.add(t);
-
-            //if this is the end of the caption and a valid chunk or
-            //if the current token has a different, valid chunk idx,
-            //store the last chunk
-            if(prevChunkIdx > -1 && (!sameChunkIdx || tIdx == _tokenList.size()-1)) {
-                Chunk c = new Chunk(_docID, _idx, prevChunkIdx, prevChunkType, chunkTokenList);
-                _chunkList.add(c);
-            }
-
-            //if the current chunk idx has a different,
-            //valid chunk idx from the previous,
-            //this is a new chunk
-            if(!sameChunkIdx && currentChunkIdx > -1) {
-                chunkTokenList.clear();
-                chunkTokenList.add(t);
-            }
-
-            prevChunkIdx = currentChunkIdx;
-            prevChunkType = currentChunkType;
-        }*/
-
         //Though this isn't the most efficient way
         //to do this, it's the safest to avoid
         //weird off-by-one issues; store the min/max
@@ -1123,38 +1072,6 @@ public class Caption extends Annotation {
     private void initMentionList()
     {
         _mentionList = new ArrayList<>();
-        /*
-        int startIdx_chunk = -1;
-        int prevEntityIdx = -1;
-        for(int i=0; i<_chunkList.size(); i++){
-            Chunk ch = _chunkList.get(i);
-            int entityIdx = ch.getTokenList().get(0).mentionIdx;
-
-            //if this is an entity boundary, store the chunks
-            if(prevEntityIdx != entityIdx || i == _chunkList.size()-1){
-                //if the previous chunk(s) were a valid entity, store it
-                if(prevEntityIdx > -1 && startIdx_chunk > -1){
-                    List<Chunk> chunkSubList =
-                            _chunkList.subList(startIdx_chunk, _chunkList.size());
-                    List<Token> tokenSubList = new ArrayList<>();
-                    chunkSubList.stream().forEachOrdered(c -> tokenSubList.addAll(c.getTokenList()));
-                    if(!tokenSubList.isEmpty()){
-                        Mention m = new Mention(_docID, _idx, prevEntityIdx,
-                                tokenSubList.get(0).chainID, tokenSubList, chunkSubList);
-                        _mentionList.add(m);
-                    }
-                    startIdx_chunk = -1;
-                }
-
-                //if our _current_ chunk is a valid entity, store it
-                if(entityIdx > -1){
-                    startIdx_chunk = entityIdx;
-                }
-            }
-
-            prevEntityIdx = entityIdx;
-        }*/
-
         Map<Integer, Integer[]> mentionTokenDict = new HashMap<>();
         Map<Integer, String> mentionChainDict = new HashMap<>();
         for(Token t : _tokenList){

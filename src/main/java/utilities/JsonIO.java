@@ -6,6 +6,10 @@ import org.json.simple.JSONObject;
 import java.util.Collection;
 import java.util.Map;
 
+/**Reads a .json file for MSCOCO
+ *
+ * @author ccervantes
+ */
 public class JsonIO
 {
     /**Writes the given contents map as a JSON file at fileRoot
